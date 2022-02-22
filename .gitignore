@@ -1,0 +1,19 @@
+# Zig Ignores
+zig-cache/
+zig-out/
+/release/
+/debug/
+/build/
+/build-*/
+/docgen_tmp/
+
+# Vs code/studio temporary files
+.vs/*
+
+# Binary data created by the asset generator
+*.bin
+
+# our generated zig files
+*.gen.zig
+
+imgui.ini

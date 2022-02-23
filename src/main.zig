@@ -7,7 +7,9 @@ const lesson = @import("lessons/04.zig");
 
 
 pub fn main() !void {
-    var context : window.Context = try window.Context.init();
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var allocator = gpa.allocator();
+    var context : window.Context = try window.Context.init(allocator);
     defer context.deinit();
 
     try lesson.init(context);

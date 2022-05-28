@@ -2,6 +2,7 @@ const std = @import("std");
 const gl = @import("gl");
 const window = @import("../window.zig");
 const glhelp = @import("../glhelp.zig");
+const stb = @import("../stbi.zig");
 
 var program : gl.GLuint = undefined;
 
@@ -10,6 +11,7 @@ var vertex_buffer_object : gl.GLuint = undefined;
 var element_buffer_object : gl.GLuint = undefined;
 var instance_vertex_buffer_object : gl.GLuint = undefined;
 var camera_uniform : gl.GLint = undefined;
+var texture_handle : gl.GLuint = undefined;
 
 var instance_offsets : [100]SpriteInfo = undefined;
 
@@ -100,6 +102,28 @@ pub fn init(ctxt : window.Context) !void
     camera_uniform = gl.getUniformLocation(program, @as([*c]const gl.GLchar, "uCamera"));
     if (camera_uniform < 0)
         @panic("Couln't find uniform");
+
+    {
+        var x : c_int = undefined;
+        var y : c_int = undefined;
+        var n : c_int = undefined;
+
+        var data : [*c]u8 = stb.stbi_load("data/checker.png", &x, &y, &n, 4);
+        if (data == null)
+            return error.StbiLoadFail;
+        defer stb.stbi_image_free(data);
+
+        gl.genTextures(1, &texture_handle);
+        gl.bindTexture(gl.TEXTURE_2D, texture_handle);
+
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, x, y, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
+        gl.generateMipmap(gl.TEXTURE_2D);
+
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST_MIPMAP_NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST_MIPMAP_NEAREST);
+    }
 }
 
 var time : usize = 0;
@@ -133,5 +157,6 @@ pub fn run(ctxt : window.Context) !void
     gl.useProgram(program);
     gl.uniformMatrix4fv(camera_uniform, 1, gl.TRUE, &mat[0]);
     gl.bindVertexArray(vertex_array_object);
+    gl.bindTexture(gl.TEXTURE_2D, texture_handle);
     gl.drawElementsInstanced(gl.TRIANGLES, 6, gl.UNSIGNED_INT, null, 1);
 }

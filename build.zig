@@ -41,12 +41,14 @@ pub fn build(b: *std.build.Builder) void {
             imgui_path ++ "imgui_tables.cpp",
             imgui_path ++ "imgui_widgets.cpp",
         },
-        &[_][]const u8{"-O0", "-g"});
+        &[_][]const u8{});
 
     exe.addIncludeDir(cimgui_path);
     exe.linkLibCpp();
     exe.linkLibC();
 
+    exe.addIncludePath("libs/stb");
+    exe.addCSourceFile("libs/stb/stbi_impl.c", &[_][]const u8{"-std=c99"});
 
     glfw.link(b,exe, .{});
     exe.install();

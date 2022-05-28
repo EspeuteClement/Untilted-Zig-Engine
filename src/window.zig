@@ -13,6 +13,8 @@ const c = @cImport({
 }
 );
 
+const with_imgui = false;
+
 fn getProcAdress(dummy : ?*anyopaque, proc_name : [:0]const u8) ?*const anyopaque
 {
     _ = dummy;
@@ -69,8 +71,8 @@ pub const Context = struct {
             game_width : u32 = 640,
             game_height : u32 = 480,
 
-            window_width : u32 = 800,
-            window_height : u32 = 600,
+            window_width : u32 = 640,
+            window_height : u32 = 480,
         };
     };
 
@@ -182,6 +184,7 @@ pub const Context = struct {
         _ = c.ImGui_ImplGlfw_InitForOpenGL(@ptrCast(*c.GLFWwindow, self.data.glfw_window.handle), true);
         _ = c.ImGui_ImplOpenGL3_Init("#version 130");
 
+        try glfw.swapInterval(1);
 
         try self.initGameRenderbuffer();
 
@@ -204,7 +207,7 @@ pub const Context = struct {
 
             self.data.current_zoom = @intCast(u8, min);
 
-            data.*.DesiredSize = .{.x = @intToFloat(f32, min * self.data.config.game_width), .y = @intToFloat(f32, min * self.data.config.game_height)};
+            data.*.DesiredSize = .{.x = @intToFloat(f32, min * self.data.config.game_width), .y = @intToFloat(f32, min * self.data.config.game_height) + 20.0};
         }
     }
 
@@ -220,15 +223,19 @@ pub const Context = struct {
             gl.clearColor(0.7, 0.2, 0.1, 1.0);
             gl.clear(gl.COLOR_BUFFER_BIT);
 
-            c.ImGui_ImplOpenGL3_NewFrame();
-            c.ImGui_ImplGlfw_NewFrame();
-
-            c.igNewFrame();
-
-            if (show_demo_window)
+            if (with_imgui)
             {
-                c.igShowDemoWindow(&show_demo_window);
+                c.ImGui_ImplOpenGL3_NewFrame();
+                c.ImGui_ImplGlfw_NewFrame();
+
+                c.igNewFrame();
+
+                if (show_demo_window)
+                {
+                    c.igShowDemoWindow(&show_demo_window);
+                }
             }
+
 
             gl.viewport(0, 0, @intCast(c_int, self.data.config.game_width), @intCast(c_int, self.data.config.game_height));
 
@@ -236,14 +243,18 @@ pub const Context = struct {
             try callback(self.*);
             gl.bindFramebuffer(gl.FRAMEBUFFER, 0);
 
-            c.igSetNextWindowSizeConstraints(.{.x = 0, .y = 0}, .{.x = std.math.f32_max, .y = std.math.f32_max}, imguiGameRenderSizeConstraintCallback, self);
+            if (with_imgui)
+            {
+                c.igSetNextWindowSizeConstraints(.{.x = 0, .y = 0}, .{.x = std.math.f32_max, .y = std.math.f32_max}, imguiGameRenderSizeConstraintCallback, self);
 
-            c.igPushStyleVar_Vec2(c.ImGuiStyleVar_WindowPadding, .{.x = 0, .y = 0});
-            _ = c.igBegin("Scene Window", null, c.ImGuiWindowFlags_NoScrollbar);
-            c.igImage(@intToPtr(*anyopaque, self.data.game_texture), .{.x = @intToFloat(f32, self.data.config.game_width * @intCast(u32, self.data.current_zoom)), .y = @intToFloat(f32, self.data.config.game_height * @intCast(u32, self.data.current_zoom))}, .{.x = 0, .y = 1}, .{.x = 1, .y = 0}, .{.x = 1.0, .y = 1.0, .z = 1.0, .w = 1.0}, .{.x = 1.0, .y = 1.0, .z = 1.0, .w = 0.0});
+                c.igPushStyleVar_Vec2(c.ImGuiStyleVar_WindowPadding, .{.x = 0, .y = 0});
+                _ = c.igBegin("Scene Window", null, c.ImGuiWindowFlags_NoScrollbar);
+                c.igImage(@intToPtr(*anyopaque, self.data.game_texture), .{.x = @intToFloat(f32, self.data.config.game_width * @intCast(u32, self.data.current_zoom)), .y = @intToFloat(f32, self.data.config.game_height * @intCast(u32, self.data.current_zoom))}, .{.x = 0, .y = 1}, .{.x = 1, .y = 0}, .{.x = 1.0, .y = 1.0, .z = 1.0, .w = 1.0}, .{.x = 1.0, .y = 1.0, .z = 1.0, .w = 0.0});
 
-            c.igEnd();
-            c.igPopStyleVar(1);
+                c.igEnd();
+                c.igPopStyleVar(1);
+            }
+
 
             gl.viewport(0,0, @intCast(gl.GLint, self.data.config.window_width), @intCast(gl.GLint, self.data.config.window_height));
 
@@ -254,8 +265,11 @@ pub const Context = struct {
 
             gl.bindTexture(gl.TEXTURE_2D, 0);
 
-            c.igRender();
-            c.ImGui_ImplOpenGL3_RenderDrawData(c.igGetDrawData());
+            if (with_imgui)
+            {
+                c.igRender();
+                c.ImGui_ImplOpenGL3_RenderDrawData(c.igGetDrawData());
+            }
 
             try glfw.Window.swapBuffers(self.data.glfw_window);
         }

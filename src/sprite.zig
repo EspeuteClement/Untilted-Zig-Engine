@@ -23,12 +23,12 @@ const SpriteInfo = struct {
     frames : []FrameInfo = undefined,
 
     const FrameInfo = struct {
-        x_offset : isize = 0,
-        y_offset : isize = 0,
-        u0 : isize = 0,
-        v0 : isize = 0,
-        u1 : isize = 0,
-        v1 : isize = 0,
+        x_offset : i16 = 0,
+        y_offset : i16 = 0,
+        u0 : i16 = 0,
+        v0 : i16 = 0,
+        u1 : i16 = 0,
+        v1 : i16 = 0,
     };
 
     fn init(allocator : Allocator, num_frames : usize) !Self
@@ -114,12 +114,12 @@ pub fn loadSprite(sprite_handle : Spr) !void
     for (info.frames) |*frame, i|
     {
         const json_frame_data = &json_data.data.frames[i];
-        frame.x_offset = -json_frame_data.spriteSourceSize.x;
-        frame.y_offset = -json_frame_data.spriteSourceSize.y;
+        frame.x_offset = json_frame_data.spriteSourceSize.x;
+        frame.y_offset = json_frame_data.spriteSourceSize.y;
         frame.u0 = json_frame_data.frame.x;
         frame.v0 = json_frame_data.frame.y;
-        frame.u1 = json_frame_data.frame.w;
-        frame.v1 = json_frame_data.frame.h;
+        frame.u1 = frame.u0 + json_frame_data.frame.w;
+        frame.v1 = frame.v0 + json_frame_data.frame.h;
     }
 }
 
@@ -182,7 +182,7 @@ test "get frame info" {
     try std.testing.expectEqual(info.v1, 50);
 }
 
-const Batch = struct {
+pub const Batch = struct {
     buffer : std.ArrayList(BufferInfo) = undefined,
     
     // Number of actual element drawn this frame
@@ -201,7 +201,7 @@ const Batch = struct {
         var self = Batch{};
 
         self.last_gl_size = 0;
-        self.buffer = @TypeOf(self.buffer).initCapacity(allocator, 4096);
+        self.buffer = try @TypeOf(self.buffer).initCapacity(allocator, 4096);
 
         gl.genVertexArrays(1, &self.vao);
         gl.bindVertexArray(self.vao);
@@ -215,7 +215,6 @@ const Batch = struct {
         gl.genBuffers(1, &self.vbo);
 
         gl.bindBuffer(gl.ARRAY_BUFFER, self.vbo);
-        gl.bufferData(gl.ARRAY_BUFFER, @sizeOf(BufferInfo) * self.size, null, gl.STREAM_DRAW);
 
         // Offset position
         gl.enableVertexAttribArray(1);
@@ -242,31 +241,60 @@ const Batch = struct {
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, 0);
 
         // TODO(ces) : Proper texture managment
-        self.texture_handle = texture.loadTexture("data/leneth.png", .{});
+        self.texture_handle = try texture.loadTexture("data/leneth.png", .{});
 
         return self;
     }
 
+    pub fn drawSimple(self : *Self, sprite : Spr, frame : usize,  x : f32, y : f32) !void
+    {
+        const spr_info = try getFrameInfo(sprite, frame);
+        
+        try self.buffer.ensureTotalCapacity(self.drawn_this_frame + 1);
+        self.buffer.expandToCapacity();
+
+        self.buffer.items[self.drawn_this_frame] = BufferInfo{
+            .x = x + @intToFloat(f32, spr_info.x_offset),
+            .y = y + @intToFloat(f32, spr_info.y_offset),
+            .w = spr_info.u1 - spr_info.u0,
+            .h = spr_info.v1 - spr_info.v0,
+            .u0 = spr_info.u0,
+            .v0 = spr_info.v0,
+            .u1 = spr_info.u1,
+            .v1 = spr_info.v1,
+        };
+
+        self.drawn_this_frame += 1;
+    }
+
     pub fn render(self : *Self) !void
     {
+        try self.renderNoClear();
+        self.drawn_this_frame = 0;
+    }
+
+    pub fn renderNoClear(self : *Self) !void
+    {
         gl.bindBuffer(gl.ARRAY_BUFFER, self.vbo);
-        if (self.drawn_this_frame < self.last_gl_size)
+        if (self.buffer.items.len > 0)
         {
-            gl.bufferSubData(gl.ARRAY_BUFFER, 0, self.drawn_this_frame * @sizeOf(BufferInfo), &self.buffer.items[0]);
+            if (self.drawn_this_frame < self.last_gl_size)
+            {
+                gl.bufferSubData(gl.ARRAY_BUFFER, 0, @intCast(isize, self.drawn_this_frame * @sizeOf(BufferInfo)), &self.buffer.items[0]);
+            }
+            else
+            {
+                gl.bufferData(gl.ARRAY_BUFFER, @intCast(isize, self.drawn_this_frame  * @sizeOf(BufferInfo)),&self.buffer.items[0], gl.DYNAMIC_DRAW);
+            }
         }
-        else
-        {
-            gl.bufferData(gl.ARRAY_BUFFER, self.drawn_this_frame  * @sizeOf(BufferInfo),&self.buffer.items[0], gl.DYNAMIC_DRAW);
-        }
+
 
         gl.bindVertexArray(self.vao);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
         texture.bindTexture(self.texture_handle);
 
-        gl.drawElementsInstanced(gl.TRIANGLES, 6, gl.UNSIGNED_INT, null, self.drawn_this_frame);
-
-        self.drawn_this_frame = 0;
+        gl.drawElementsInstanced(gl.TRIANGLES, 6, gl.UNSIGNED_INT, null, @intCast(c_int, self.drawn_this_frame));
     }
 
     pub fn deinit(self : *Self) !void

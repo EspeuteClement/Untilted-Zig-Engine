@@ -15,3 +15,8 @@ pub fn main() !void {
     try lesson.init(context);
     try context.run(lesson.run);
 }
+
+test "package tests" {
+    _ = @import("texture.zig");
+    _ = @import("sprite.zig");
+}

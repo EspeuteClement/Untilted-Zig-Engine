@@ -13,7 +13,7 @@ const c = @cImport({
 }
 );
 
-const with_imgui = false;
+const with_imgui = true;
 
 fn getProcAdress(dummy : ?*anyopaque, proc_name : [:0]const u8) ?*const anyopaque
 {
@@ -156,11 +156,13 @@ pub const Context = struct {
         self.allocator = allocator;
 
         std.log.info("{d: >7.4} init window ...", .{glfw.getTime()});
+
         self.data.glfw_window = try glfw.Window.create(self.data.config.game_width, self.data.config.game_height, "Learn Opengl", null, null, 
         .{
             .opengl_profile = .opengl_core_profile,
             .context_version_major = 3,
             .context_version_minor = 3,
+            .maximized = with_imgui,
         });
         errdefer self.data.glfw_window.destroy();
 
@@ -207,7 +209,7 @@ pub const Context = struct {
 
             self.data.current_zoom = @intCast(u8, min);
 
-            data.*.DesiredSize = .{.x = @intToFloat(f32, min * self.data.config.game_width), .y = @intToFloat(f32, min * self.data.config.game_height) + 20.0};
+            data.*.DesiredSize = .{.x = @intToFloat(f32, min * self.data.config.game_width), .y = @intToFloat(f32, min * self.data.config.game_height) + 32.0};
         }
     }
 
@@ -220,7 +222,7 @@ pub const Context = struct {
             try glfw.pollEvents();
 
 
-            gl.clearColor(0.7, 0.2, 0.1, 1.0);
+            gl.clearColor(0.2, 0.2, 0.2, 1.0);
             gl.clear(gl.COLOR_BUFFER_BIT);
 
             if (with_imgui)
@@ -249,21 +251,24 @@ pub const Context = struct {
 
                 c.igPushStyleVar_Vec2(c.ImGuiStyleVar_WindowPadding, .{.x = 0, .y = 0});
                 _ = c.igBegin("Scene Window", null, c.ImGuiWindowFlags_NoScrollbar);
-                c.igImage(@intToPtr(*anyopaque, self.data.game_texture), .{.x = @intToFloat(f32, self.data.config.game_width * @intCast(u32, self.data.current_zoom)), .y = @intToFloat(f32, self.data.config.game_height * @intCast(u32, self.data.current_zoom))}, .{.x = 0, .y = 1}, .{.x = 1, .y = 0}, .{.x = 1.0, .y = 1.0, .z = 1.0, .w = 1.0}, .{.x = 1.0, .y = 1.0, .z = 1.0, .w = 0.0});
+                c.igImage(@intToPtr(*anyopaque, self.data.game_texture), .{.x = @intToFloat(f32, self.data.config.game_width * @intCast(u32, self.data.current_zoom)), .y = @intToFloat(f32, self.data.config.game_height * @intCast(u32, self.data.current_zoom))}, .{.x = 1, .y = 1}, .{.x = 0, .y = 0}, .{.x = 1.0, .y = 1.0, .z = 1.0, .w = 1.0}, .{.x = 1.0, .y = 1.0, .z = 1.0, .w = 0.0});
 
                 c.igEnd();
                 c.igPopStyleVar(1);
             }
 
 
-            gl.viewport(0,0, @intCast(gl.GLint, self.data.config.window_width), @intCast(gl.GLint, self.data.config.window_height));
+            if (!with_imgui)
+            {
+                gl.viewport(0,0, @intCast(gl.GLint, self.data.config.window_width), @intCast(gl.GLint, self.data.config.window_height));
 
-            gl.useProgram(self.data.screen_shader);
-            gl.bindVertexArray(vertex_array_object);
-            gl.bindTexture(gl.TEXTURE_2D, self.data.game_texture);
-            gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, null);
+                gl.useProgram(self.data.screen_shader);
+                gl.bindVertexArray(vertex_array_object);
+                gl.bindTexture(gl.TEXTURE_2D, self.data.game_texture);
+                gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, null);
 
-            gl.bindTexture(gl.TEXTURE_2D, 0);
+                gl.bindTexture(gl.TEXTURE_2D, 0);
+            }
 
             if (with_imgui)
             {

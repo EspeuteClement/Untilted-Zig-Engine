@@ -30,93 +30,24 @@ const SpriteInfo = packed struct {
     v1 : i16 = 0,
 };
 
+var batch : sprite.Batch = undefined;
+
 pub fn init(ctxt : window.Context) !void
 {
     _ = ctxt;
 
+    try sprite.init(ctxt.allocator);
+    errdefer sprite.deinit();
+
+    try texture.init(ctxt.allocator);
+
+    batch = try sprite.Batch.init(ctxt.allocator);
+
     program = try glhelp.buildProgram(@embedFile("05.vert"), @embedFile("05.frag"));
-
-    gl.genVertexArrays(1, &vertex_array_object);
-    gl.bindVertexArray(vertex_array_object);
-
-    gl.genBuffers(1, &vertex_buffer_object);
-    gl.genBuffers(1, &instance_vertex_buffer_object);
-    gl.genBuffers(1, &element_buffer_object);
-
-    var sprite_data = try aseprite.getSpriteSheetDataFromFile("data/leneth.json", ctxt.allocator);
-    defer aseprite.freeSpriteSheetData(sprite_data);
-
-    const vertices = [_]f32 {
-        1, 1,
-        1, 0,
-        0, 0,
-        0, 1,
-    };
-
-    const indices = [_]gl.GLuint {
-        0,1,3,
-        1,2,3,
-    };
-
-    for (instance_offsets) |*instance, i|
-    {
-        
-        var x : f32 = @intToFloat(f32, @intCast(isize, i % 10)) / 10.0;
-        var y : f32 = @intToFloat(f32, @intCast(isize, i / 10)) / 10.0;
-        instance.x = x * 150.0 * 10.0;
-        instance.y = y * 150.0 * 10.0;
-        // instance.w = 32;
-        // instance.h = 32;
-        // instance.u0 = 0;
-        // instance.v0 = 0;
-        // instance.u1 = 32;
-        // instance.v1 = 32;
-        instance.w = sprite_data.data.frames[0].frame.w;
-        instance.h = sprite_data.data.frames[0].frame.h;
-        instance.u0 = sprite_data.data.frames[0].frame.x;
-        instance.v0 = sprite_data.data.frames[0].frame.y;
-        instance.u1 = instance.u0 +| sprite_data.data.frames[0].frame.w;
-        instance.v1 = instance.v0 +| sprite_data.data.frames[0].frame.h;
-    }
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, vertex_buffer_object);
-    gl.bufferData(gl.ARRAY_BUFFER, @sizeOf(@TypeOf(vertices)), &vertices[0], gl.STATIC_DRAW);
-
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, element_buffer_object);
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @sizeOf(@TypeOf(indices)), &indices[0], gl.STATIC_DRAW);
-
-    gl.enableVertexAttribArray(0);
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, gl.FALSE, 2 * @sizeOf(f32), @intToPtr(?*const anyopaque, 0));
-    
-    gl.bindBuffer(gl.ARRAY_BUFFER, instance_vertex_buffer_object);
-    gl.bufferData(gl.ARRAY_BUFFER, @sizeOf(@TypeOf(instance_offsets)), &instance_offsets, gl.DYNAMIC_DRAW);
-
-    // Offset position
-    gl.enableVertexAttribArray(1);
-    gl.vertexAttribPointer(1, 2, gl.FLOAT, gl.FALSE, @sizeOf(SpriteInfo), @intToPtr(?*const anyopaque, @offsetOf(SpriteInfo, "x")));
-    gl.vertexAttribDivisor(1, 1);
-
-    // Size
-    gl.enableVertexAttribArray(2);
-    gl.vertexAttribPointer(2, 2, gl.SHORT, gl.FALSE, @sizeOf(SpriteInfo), @intToPtr(?*const anyopaque, @offsetOf(SpriteInfo, "w")));
-    gl.vertexAttribDivisor(2, 1);
-
-    // UV0
-    gl.enableVertexAttribArray(3);
-    gl.vertexAttribPointer(3, 2, gl.SHORT, gl.FALSE, @sizeOf(SpriteInfo), @intToPtr(?*const anyopaque, @offsetOf(SpriteInfo, "u0")));
-    gl.vertexAttribDivisor(3, 1);
-
-    // UV1
-    gl.enableVertexAttribArray(4);
-    gl.vertexAttribPointer(4, 2, gl.SHORT, gl.FALSE, @sizeOf(SpriteInfo), @intToPtr(?*const anyopaque, @offsetOf(SpriteInfo, "u1")));
-    gl.vertexAttribDivisor(4, 1);
 
     camera_uniform = gl.getUniformLocation(program, @as([*c]const gl.GLchar, "uCamera"));
     if (camera_uniform < 0)
         @panic("Couln't find uniform");
-
-    try texture.init(ctxt.allocator);
-    texture_handle = try texture.loadTexture("data/leneth.png", .{});
 }
 
 var time : usize = 0;
@@ -144,33 +75,28 @@ pub fn run(ctxt : window.Context) !void
     const w = @intToFloat(f32, ctxt.data.config.game_width);
     const h = @intToFloat(f32, ctxt.data.config.game_height);
     const fTime = @intToFloat(f32,time);
-    const mat = makeCamera(fTime, fTime, w, h);
+    const mat = makeCamera(0.0, 0.0, w, h);
 
-    // for (instance_offsets) |*instance, i|
-    // {
-        
-    //     var x : f32 = @intToFloat(f32, @intCast(isize, i % 10)) / 10.0;
-    //     var y : f32 = @intToFloat(f32, @intCast(isize, i / 10)) / 10.0;
-    //     instance.x = x * 150.0 * 10.0 - fTime;
-    //     instance.y = y * 150.0 * 10.0 - fTime;
-    // }
-    instance_offsets[0].x = @floor(@intToFloat(f32, (time * 4) % 640)) ;
-    instance_offsets[0].y = 100;
+    try batch.drawSimple(.@"leneth", @divTrunc(time, 10) % 4, 150.0, 150.0);
+
+    var i :usize = 0;
+    while (i < 10_000) 
+    {
+        const fi = @intToFloat(f32, i);
+        try batch.drawSimple(.@"leneth", @divTrunc(time+i, 10) % 4, 
+            200.0 + 100 * std.math.sin(fTime / 100.0 + fi) + std.math.sin(fTime / 500 + fi*743.0) * 300.0, 
+            200.0 + 100 * std.math.cos(fTime / 100.0 + fi) + std.math.cos(fTime / 500 + fi*114.0) * 200.0)
+            ;
+        i += 1;
+    }
 
     //std.log.info("{d}", .{instance_offsets[0]});
     gl.clearColor(0, 1, 1, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
-    gl.bindBuffer(gl.ARRAY_BUFFER, instance_vertex_buffer_object);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, @sizeOf(@TypeOf(instance_offsets)), &instance_offsets);
-
     gl.useProgram(program);
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
     gl.uniformMatrix4fv(camera_uniform, 1, gl.TRUE, &mat[0]);
-    gl.bindVertexArray(vertex_array_object);
 
-    texture.bindTexture(texture_handle);
-
-    gl.drawElementsInstanced(gl.TRIANGLES, 6, gl.UNSIGNED_INT, null, 100);
+    try batch.render();
 }

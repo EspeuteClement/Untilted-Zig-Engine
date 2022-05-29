@@ -8,9 +8,10 @@ layout (location = 4) in vec2 aUV1;
 uniform mat4 uCamera;
 
 out vec2 fUV;
+uniform sampler2D ourTexture;
 
 void main()
 {
-    gl_Position = uCamera * vec4(aPos * aSize + aOffset, 0.0, 1.0);
-    fUV = mix(aUV0, aUV1, aPos);
+    gl_Position = uCamera * vec4(aOffset + aPos * aSize, 0.0, 1.0);
+    fUV = (mix(aUV0, aUV1, aPos)) / textureSize(ourTexture, 0);
 }

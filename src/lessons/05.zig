@@ -3,6 +3,9 @@ const gl = @import("gl");
 const window = @import("../window.zig");
 const glhelp = @import("../glhelp.zig");
 const stb = @import("../stbi.zig");
+const aseprite = @import("../aseprite.zig");
+const texture = @import("../texture.zig");
+const sprite = @import("../sprite.zig");
 
 var program : gl.GLuint = undefined;
 
@@ -11,7 +14,8 @@ var vertex_buffer_object : gl.GLuint = undefined;
 var element_buffer_object : gl.GLuint = undefined;
 var instance_vertex_buffer_object : gl.GLuint = undefined;
 var camera_uniform : gl.GLint = undefined;
-var texture_handle : gl.GLuint = undefined;
+var texture_handle : texture.TextureHandle = undefined;
+var sprite_handle : sprite.Spr = .@"leneth";
 
 var instance_offsets : [100]SpriteInfo = undefined;
 
@@ -39,6 +43,9 @@ pub fn init(ctxt : window.Context) !void
     gl.genBuffers(1, &instance_vertex_buffer_object);
     gl.genBuffers(1, &element_buffer_object);
 
+    var sprite_data = try aseprite.getSpriteSheetDataFromFile("data/leneth.json", ctxt.allocator);
+    defer aseprite.freeSpriteSheetData(sprite_data);
+
     const vertices = [_]f32 {
         1, 1,
         1, 0,
@@ -51,20 +58,25 @@ pub fn init(ctxt : window.Context) !void
         1,2,3,
     };
 
-    var i : usize = 0;
-    for (instance_offsets) |*instance|
+    for (instance_offsets) |*instance, i|
     {
         
         var x : f32 = @intToFloat(f32, @intCast(isize, i % 10)) / 10.0;
         var y : f32 = @intToFloat(f32, @intCast(isize, i / 10)) / 10.0;
-        instance.x = x * @intToFloat(f32, ctxt.data.config.game_width);
-        instance.y = y * @intToFloat(f32, ctxt.data.config.game_height);
-        instance.w = 64;
-        instance.h = 32;
-        instance.u0 = @floatToInt(i16, x * @as(f32,std.math.maxInt(i16)));
-        instance.v0 = @floatToInt(i16, y * @as(f32, std.math.maxInt(i16)));
-        instance.u1 = @floatToInt(i16, (x+0.5) * @as(f32,std.math.maxInt(i16)));
-        instance.v1 = @floatToInt(i16, (y+0.5) * @as(f32, std.math.maxInt(i16)));
+        instance.x = x * 150.0 * 10.0;
+        instance.y = y * 150.0 * 10.0;
+        // instance.w = 32;
+        // instance.h = 32;
+        // instance.u0 = 0;
+        // instance.v0 = 0;
+        // instance.u1 = 32;
+        // instance.v1 = 32;
+        instance.w = sprite_data.data.frames[0].frame.w;
+        instance.h = sprite_data.data.frames[0].frame.h;
+        instance.u0 = sprite_data.data.frames[0].frame.x;
+        instance.v0 = sprite_data.data.frames[0].frame.y;
+        instance.u1 = instance.u0 +| sprite_data.data.frames[0].frame.w;
+        instance.v1 = instance.v0 +| sprite_data.data.frames[0].frame.h;
     }
 
     gl.bindBuffer(gl.ARRAY_BUFFER, vertex_buffer_object);
@@ -91,72 +103,74 @@ pub fn init(ctxt : window.Context) !void
 
     // UV0
     gl.enableVertexAttribArray(3);
-    gl.vertexAttribPointer(3, 2, gl.SHORT, gl.TRUE, @sizeOf(SpriteInfo), @intToPtr(?*const anyopaque, @offsetOf(SpriteInfo, "u0")));
+    gl.vertexAttribPointer(3, 2, gl.SHORT, gl.FALSE, @sizeOf(SpriteInfo), @intToPtr(?*const anyopaque, @offsetOf(SpriteInfo, "u0")));
     gl.vertexAttribDivisor(3, 1);
 
     // UV1
     gl.enableVertexAttribArray(4);
-    gl.vertexAttribPointer(4, 2, gl.SHORT, gl.TRUE, @sizeOf(SpriteInfo), @intToPtr(?*const anyopaque, @offsetOf(SpriteInfo, "u1")));
+    gl.vertexAttribPointer(4, 2, gl.SHORT, gl.FALSE, @sizeOf(SpriteInfo), @intToPtr(?*const anyopaque, @offsetOf(SpriteInfo, "u1")));
     gl.vertexAttribDivisor(4, 1);
 
     camera_uniform = gl.getUniformLocation(program, @as([*c]const gl.GLchar, "uCamera"));
     if (camera_uniform < 0)
         @panic("Couln't find uniform");
 
-    {
-        var x : c_int = undefined;
-        var y : c_int = undefined;
-        var n : c_int = undefined;
-
-        var data : [*c]u8 = stb.stbi_load("data/checker.png", &x, &y, &n, 4);
-        if (data == null)
-            return error.StbiLoadFail;
-        defer stb.stbi_image_free(data);
-
-        gl.genTextures(1, &texture_handle);
-        gl.bindTexture(gl.TEXTURE_2D, texture_handle);
-
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, x, y, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
-        gl.generateMipmap(gl.TEXTURE_2D);
-
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST_MIPMAP_NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST_MIPMAP_NEAREST);
-    }
+    try texture.init(ctxt.allocator);
+    texture_handle = try texture.loadTexture("data/leneth.png", .{});
 }
 
 var time : usize = 0;
+
+pub fn makeCamera(x: f32, y:f32, w: f32, h: f32) [16]f32 {
+    const sx = -2.0/ w;
+    const tx = 1 + std.math.floor(x) / w * 2.0;
+    const sy = -2.0 / h;
+    const ty = 1 + std.math.floor(y) / h * 2.0;
+    
+    return [16]f32 {
+        sx ,0.0,0.0,tx,
+        0.0,sy ,0.0,ty,
+        0.0,0.0,1.0,0.0,
+        0.0,0.0,0.0,1.0
+    };
+}
 
 pub fn run(ctxt : window.Context) !void
 {
     _ = ctxt;
 
-    const w = @intToFloat(f32, ctxt.data.config.game_width);
-    const h = @intToFloat(f32, ctxt.data.config.game_height);
-    const mat = [_]f32 {
-         -2.0 / w, 0.0, 0.0, 1,
-         0.0,-2.0 / h, 0.0, 1,
-         0.0, 0.0, 1.0, 0,
-         0.0, 0.0, 0.0, 1.0
-    };
-
     time += 1;
 
+    const w = @intToFloat(f32, ctxt.data.config.game_width);
+    const h = @intToFloat(f32, ctxt.data.config.game_height);
+    const fTime = @intToFloat(f32,time);
+    const mat = makeCamera(fTime, fTime, w, h);
+
+    // for (instance_offsets) |*instance, i|
+    // {
+        
+    //     var x : f32 = @intToFloat(f32, @intCast(isize, i % 10)) / 10.0;
+    //     var y : f32 = @intToFloat(f32, @intCast(isize, i / 10)) / 10.0;
+    //     instance.x = x * 150.0 * 10.0 - fTime;
+    //     instance.y = y * 150.0 * 10.0 - fTime;
+    // }
     instance_offsets[0].x = @floor(@intToFloat(f32, (time * 4) % 640)) ;
     instance_offsets[0].y = 100;
 
-    std.log.info("{d}", .{instance_offsets[0]});
-
-    gl.clearColor(1, 0, 1, 1);
+    //std.log.info("{d}", .{instance_offsets[0]});
+    gl.clearColor(0, 1, 1, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, instance_vertex_buffer_object);
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, @sizeOf(@TypeOf(instance_offsets)), &instance_offsets);
 
     gl.useProgram(program);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.uniformMatrix4fv(camera_uniform, 1, gl.TRUE, &mat[0]);
     gl.bindVertexArray(vertex_array_object);
-    gl.bindTexture(gl.TEXTURE_2D, texture_handle);
-    gl.drawElementsInstanced(gl.TRIANGLES, 6, gl.UNSIGNED_INT, null, 1);
+
+    texture.bindTexture(texture_handle);
+
+    gl.drawElementsInstanced(gl.TRIANGLES, 6, gl.UNSIGNED_INT, null, 100);
 }

@@ -17,20 +17,41 @@ pub fn build(b: *std.build.Builder) void {
     // exe_options.addOption([]const u8, "lesson", b.option([]const u8, "lesson", "Lesson file to build (ex : '01')") orelse "01");
     
     const exe = b.addExecutable("ZigOpengl", "src/main.zig");
-    exe.setTarget(target);
-    exe.setBuildMode(mode);
+    configure(exe, b, target, mode);
+    exe.install();
 
-    // exe.addOptions("build_options", exe_options);
 
-    exe.addPackagePath("glfw", "libs/mach-glfw/src/main.zig");
-    exe.addPackagePath("gl", "libs/gl/gl_3v3.zig");
+    const run_cmd = exe.run();
+    run_cmd.step.dependOn(b.getInstallStep());
+    if (b.args) |args| {
+        run_cmd.addArgs(args);
+    }
+
+    const run_step = b.step("run", "Run the app");
+    run_step.dependOn(&run_cmd.step);
+
+    const exe_tests = b.addTest("src/main.zig");
+    configure(exe_tests, b, target, mode);
+
+    const test_step = b.step("test", "Run unit tests");
+    test_step.dependOn(&exe_tests.step);
+}
+
+fn configure(step : anytype, b : *std.build.Builder, target : std.zig.CrossTarget, mode : std.builtin.Mode) void {
+    step.setTarget(target);
+    step.setBuildMode(mode);
+
+    // step.addOptions("build_options", step_options);
+
+    step.addPackagePath("glfw", "libs/mach-glfw/src/main.zig");
+    step.addPackagePath("gl", "libs/gl/gl_3v3.zig");
 
 
     // Imgui Part
 
     const cimgui_path = "libs/imgui/";
     const imgui_path = cimgui_path ++ "imgui/";
-    exe.addCSourceFiles(
+    step.addCSourceFiles(
         &[_][]const u8{
             cimgui_path ++"cimgui.cpp",
             imgui_path ++ "imgui.cpp",
@@ -43,29 +64,12 @@ pub fn build(b: *std.build.Builder) void {
         },
         &[_][]const u8{});
 
-    exe.addIncludeDir(cimgui_path);
-    exe.linkLibCpp();
-    exe.linkLibC();
+    step.addIncludeDir(cimgui_path);
+    step.linkLibCpp();
+    step.linkLibC();
 
-    exe.addIncludePath("libs/stb");
-    exe.addCSourceFile("libs/stb/stbi_impl.c", &[_][]const u8{"-std=c99"});
+    step.addIncludePath("libs/stb");
+    step.addCSourceFile("libs/stb/stbi_impl.c", &[_][]const u8{"-std=c99"});
 
-    glfw.link(b,exe, .{});
-    exe.install();
-
-    const run_cmd = exe.run();
-    run_cmd.step.dependOn(b.getInstallStep());
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
-
-    const run_step = b.step("run", "Run the app");
-    run_step.dependOn(&run_cmd.step);
-
-    const exe_tests = b.addTest("src/main.zig");
-    exe_tests.setTarget(target);
-    exe_tests.setBuildMode(mode);
-
-    const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&exe_tests.step);
+    glfw.link(b,step, .{});
 }

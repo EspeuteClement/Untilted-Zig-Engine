@@ -36,12 +36,8 @@ pub fn init(ctxt : window.Context) !void
 {
     _ = ctxt;
 
-    try sprite.init(ctxt.allocator);
-    errdefer sprite.deinit();
-
-    try texture.init(ctxt.allocator);
-
     batch = try sprite.Batch.init(ctxt.allocator);
+    batch.texture_handle = try texture.loadTexture("data/leneth.png", .{});
 
     program = try glhelp.buildProgram(@embedFile("05.vert"), @embedFile("05.frag"));
 

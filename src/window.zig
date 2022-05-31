@@ -5,6 +5,9 @@ const glfw = @import("glfw");
 const gl = @import("gl");
 const glhelp = @import("glhelp.zig");
 
+const texture = @import("texture.zig");
+const sprite = @import("sprite.zig");
+
 const c = @cImport({
     @cDefine("CIMGUI_DEFINE_ENUMS_AND_STRUCTS", "1");
     @cInclude("cimgui.h");
@@ -13,7 +16,7 @@ const c = @cImport({
 }
 );
 
-const with_imgui = true;
+const with_imgui = @import("build_options").with_imgui;
 
 fn getProcAdress(dummy : ?*anyopaque, proc_name : [:0]const u8) ?*const anyopaque
 {
@@ -177,14 +180,23 @@ pub const Context = struct {
         try gl.load(@as(?*anyopaque, null), getProcAdress);
 
 
-        _ = c.igCreateContext(null);
-        var io : [*c]c.ImGuiIO = c.igGetIO();
-        _ = io;
+        if (with_imgui)
+        {
+            _ = c.igCreateContext(null);
+            var io : [*c]c.ImGuiIO = c.igGetIO();
+            _ = io;
 
-        c.igStyleColorsDark(null);
+            c.igStyleColorsDark(null);
 
-        _ = c.ImGui_ImplGlfw_InitForOpenGL(@ptrCast(*c.GLFWwindow, self.data.glfw_window.handle), true);
-        _ = c.ImGui_ImplOpenGL3_Init("#version 130");
+            _ = c.ImGui_ImplGlfw_InitForOpenGL(@ptrCast(*c.GLFWwindow, self.data.glfw_window.handle), true);
+            _ = c.ImGui_ImplOpenGL3_Init("#version 130");
+        }
+
+        try texture.init(allocator);
+        errdefer texture.deinit();
+
+        try sprite.init(allocator);
+        errdefer sprite.deinit();
 
         try glfw.swapInterval(1);
 
@@ -282,6 +294,8 @@ pub const Context = struct {
 
     pub fn deinit(self : *Context) void
     {
+        texture.deinit();
+        sprite.deinit();
         self.data.glfw_window.destroy();
         glfw.terminate();
         self.allocator.destroy(self.data);

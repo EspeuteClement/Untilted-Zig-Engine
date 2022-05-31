@@ -164,10 +164,10 @@ test "regular load" {
     try loadSprite(Spr.@"leneth");
 
     const i = @enumToInt(Spr.@"leneth");
-    try std.testing.expectEqual(sprites[i].?.frames[0].x_offset, -39);
-    try std.testing.expectEqual(sprites[i].?.frames[0].y_offset, -46);
+    try std.testing.expectEqual(sprites[i].?.frames[0].x_offset, 39);
+    try std.testing.expectEqual(sprites[i].?.frames[0].y_offset, 46);
     try std.testing.expectEqual(sprites[i].?.frames[0].u1, 49);
-    try std.testing.expectEqual(sprites[i].?.frames[0].v1, 50);
+    try std.testing.expectEqual(sprites[i].?.frames[0].v1, 48 + 50);
 }
 
 test "get frame info" {
@@ -176,10 +176,10 @@ test "get frame info" {
 
     var info = try getFrameInfo(Spr.@"leneth", 0);
 
-    try std.testing.expectEqual(info.x_offset, -39);
-    try std.testing.expectEqual(info.y_offset, -46);
+    try std.testing.expectEqual(info.x_offset, 39);
+    try std.testing.expectEqual(info.y_offset, 46);
     try std.testing.expectEqual(info.u1, 49);
-    try std.testing.expectEqual(info.v1, 50);
+    try std.testing.expectEqual(info.v1, 48 + 50);
 }
 
 pub const Batch = struct {
@@ -194,7 +194,7 @@ pub const Batch = struct {
     vao : gl.GLuint = undefined,
     vbo : gl.GLuint = undefined,
 
-    texture_handle : texture.TextureHandle = undefined,
+    texture_handle : ?texture.TextureHandle = null,
 
     pub fn init(allocator : Allocator) !Batch
     {
@@ -240,9 +240,6 @@ pub const Batch = struct {
         gl.bindBuffer(gl.ARRAY_BUFFER, 0);
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, 0);
 
-        // TODO(ces) : Proper texture managment
-        self.texture_handle = try texture.loadTexture("data/leneth.png", .{});
-
         return self;
     }
 
@@ -275,26 +272,33 @@ pub const Batch = struct {
 
     pub fn renderNoClear(self : *Self) !void
     {
-        gl.bindBuffer(gl.ARRAY_BUFFER, self.vbo);
-        if (self.buffer.items.len > 0)
+        if (self.texture_handle) |texture_handle_not_null|
         {
-            if (self.drawn_this_frame < self.last_gl_size)
+            gl.bindBuffer(gl.ARRAY_BUFFER, self.vbo);
+            if (self.buffer.items.len > 0)
             {
-                gl.bufferSubData(gl.ARRAY_BUFFER, 0, @intCast(isize, self.drawn_this_frame * @sizeOf(BufferInfo)), &self.buffer.items[0]);
+                if (self.drawn_this_frame < self.last_gl_size)
+                {
+                    gl.bufferSubData(gl.ARRAY_BUFFER, 0, @intCast(isize, self.drawn_this_frame * @sizeOf(BufferInfo)), &self.buffer.items[0]);
+                }
+                else
+                {
+                    gl.bufferData(gl.ARRAY_BUFFER, @intCast(isize, self.drawn_this_frame  * @sizeOf(BufferInfo)),&self.buffer.items[0], gl.DYNAMIC_DRAW);
+                }
             }
-            else
-            {
-                gl.bufferData(gl.ARRAY_BUFFER, @intCast(isize, self.drawn_this_frame  * @sizeOf(BufferInfo)),&self.buffer.items[0], gl.DYNAMIC_DRAW);
-            }
+
+
+            gl.bindVertexArray(self.vao);
+            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+            texture.bindTexture(texture_handle_not_null);
+
+            gl.drawElementsInstanced(gl.TRIANGLES, 6, gl.UNSIGNED_INT, null, @intCast(c_int, self.drawn_this_frame));
         }
-
-
-        gl.bindVertexArray(self.vao);
-        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-
-        texture.bindTexture(self.texture_handle);
-
-        gl.drawElementsInstanced(gl.TRIANGLES, 6, gl.UNSIGNED_INT, null, @intCast(c_int, self.drawn_this_frame));
+        else
+        {
+            return error.NoTextureBound;
+        }
     }
 
     pub fn deinit(self : *Self) !void

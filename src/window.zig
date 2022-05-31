@@ -60,7 +60,7 @@ pub const Context = struct {
 
     pub const Data = struct {
         glfw_window : glfw.Window = undefined,
-        game_buffer : gl.GLuint = 0,
+        game_buffer : texture.FramebufferHandle = undefined,
         game_texture : gl.GLuint = 0,
         game_renderbuffer : gl.GLuint = 0,
 
@@ -81,38 +81,13 @@ pub const Context = struct {
 
     fn initGameRenderbuffer(self : *Context) !void
     {
-
-        // buffer
-        gl.genFramebuffers(1, &self.data.game_buffer);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, self.data.game_buffer);
-
-        // texture
-        gl.genTextures(1, &self.data.game_texture);
-        gl.bindTexture(gl.TEXTURE_2D, self.data.game_texture);
-
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, @intCast(c_int, self.data.config.game_width), @intCast(c_int, self.data.config.game_height), 0, gl.RGB, gl.UNSIGNED_BYTE, null);
-
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-
-        gl.bindTexture(gl.TEXTURE_2D, 0);
-
-        //bind texture to buffer
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, self.data.game_texture, 0);
-
-
-        // renderbuffer
-        gl.genRenderbuffers(1, &self.data.game_renderbuffer);
-        gl.bindRenderbuffer(gl.RENDERBUFFER, self.data.game_renderbuffer);
-        gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH24_STENCIL8, @intCast(c_int, self.data.config.game_width), @intCast(c_int, self.data.config.game_height));
-        gl.bindRenderbuffer(gl.RENDERBUFFER, 0);
-
-        gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_STENCIL_ATTACHMENT, gl.RENDERBUFFER, self.data.game_renderbuffer);
-
-        if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE)
-            return error.FramebufferInitFailed;
-
-        gl.bindFramebuffer(gl.FRAMEBUFFER, 0);
+        self.data.game_buffer = try texture.createFramebuffer(.{
+            .width = @intCast(u16, self.data.config.game_width),
+            .height = @intCast(u16, self.data.config.game_height),
+            .depth = .RGB,
+            .min_filter = .NEAREST,
+            .mag_filter = .NEAREST,
+        });
     }
 
     fn initFullscreenQuadVAO(self : *Context) !void
@@ -253,17 +228,18 @@ pub const Context = struct {
 
             gl.viewport(0, 0, @intCast(c_int, self.data.config.game_width), @intCast(c_int, self.data.config.game_height));
 
-            gl.bindFramebuffer(gl.FRAMEBUFFER, self.data.game_buffer);
+            texture.bindFramebuffer(self.data.game_buffer);
             try callback(self.*);
-            gl.bindFramebuffer(gl.FRAMEBUFFER, 0);
+            texture.bindFramebuffer(null);
 
             if (with_imgui)
             {
                 c.igSetNextWindowSizeConstraints(.{.x = 0, .y = 0}, .{.x = std.math.f32_max, .y = std.math.f32_max}, imguiGameRenderSizeConstraintCallback, self);
-
+                
+                const textureID = texture.getTextureInternalID(texture.getFramebufferTexture(self.data.game_buffer));
                 c.igPushStyleVar_Vec2(c.ImGuiStyleVar_WindowPadding, .{.x = 0, .y = 0});
                 _ = c.igBegin("Scene Window", null, c.ImGuiWindowFlags_NoScrollbar);
-                c.igImage(@intToPtr(*anyopaque, self.data.game_texture), .{.x = @intToFloat(f32, self.data.config.game_width * @intCast(u32, self.data.current_zoom)), .y = @intToFloat(f32, self.data.config.game_height * @intCast(u32, self.data.current_zoom))}, .{.x = 1, .y = 1}, .{.x = 0, .y = 0}, .{.x = 1.0, .y = 1.0, .z = 1.0, .w = 1.0}, .{.x = 1.0, .y = 1.0, .z = 1.0, .w = 0.0});
+                c.igImage(@intToPtr(*anyopaque, textureID), .{.x = @intToFloat(f32, self.data.config.game_width * @intCast(u32, self.data.current_zoom)), .y = @intToFloat(f32, self.data.config.game_height * @intCast(u32, self.data.current_zoom))}, .{.x = 1, .y = 1}, .{.x = 0, .y = 0}, .{.x = 1.0, .y = 1.0, .z = 1.0, .w = 1.0}, .{.x = 1.0, .y = 1.0, .z = 1.0, .w = 0.0});
 
                 c.igEnd();
                 c.igPopStyleVar(1);
@@ -276,7 +252,7 @@ pub const Context = struct {
 
                 gl.useProgram(self.data.screen_shader);
                 gl.bindVertexArray(vertex_array_object);
-                gl.bindTexture(gl.TEXTURE_2D, self.data.game_texture);
+                texture.bindTexture(texture.getFramebufferTexture(self.data.game_buffer));
                 gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, null);
 
                 gl.bindTexture(gl.TEXTURE_2D, 0);

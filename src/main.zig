@@ -19,4 +19,5 @@ pub fn main() !void {
 test "package tests" {
     _ = @import("texture.zig");
     _ = @import("sprite.zig");
+    _ = @import("shader.zig");
 }

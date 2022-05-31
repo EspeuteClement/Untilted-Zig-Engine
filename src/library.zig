@@ -21,11 +21,16 @@ pub fn Library(comptime T : type) type {
             self.* = undefined;
         }
 
+        pub inline fn getFast(self : *const Self, key : Key) T
+        {
+            return self.items[key.index];
+        }
+
         pub fn get(self : *const Self, key : Key) !T
         {
             if (key.index < self.items.len)
             {
-                return self.items[key.index];
+                return self.getFast(key);
             }
             return error.OutOfBounds;
         }

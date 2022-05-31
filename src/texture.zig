@@ -11,11 +11,19 @@ const TextureInfo = struct {
     handle: gl.GLuint = undefined,
 };
 
+const FramebufferInfo = struct {
+    handle: gl.GLuint = undefined,
+    texture_handle : TextureHandle = undefined,
+};
+
 const TextureLibrary = Library(TextureInfo);
 pub const TextureHandle = TextureLibrary.Key;
 
+const FramebufferLibrary = Library(FramebufferInfo);
+pub const FramebufferHandle = FramebufferLibrary.Key;
+
 var textureLibrary : TextureLibrary = undefined;
-var paths_to_handle : std.AutoArrayHashMap([]const u8, TextureHandle) = undefined;
+var framebufferLibrary : FramebufferLibrary = undefined;
 
 var is_init = false;
 
@@ -25,7 +33,7 @@ pub fn init(allocator : Allocator) !void
 
     if (is_init) @panic("Already init");
     textureLibrary = TextureLibrary.init(allocator);
-    //paths_to_handle = @TypeOf(paths_to_handle).init(paths_to_handle)
+    framebufferLibrary = FramebufferLibrary.init(allocator);
 }
 
 const LoadTextureParameters = struct {
@@ -116,6 +124,27 @@ pub fn createTexture(params : CreateTextureParams) !TextureHandle
     return handle;
 }
 
+pub fn createFramebuffer(params : CreateTextureParams) !FramebufferHandle
+{
+    var info : FramebufferInfo = undefined;
+
+    gl.genFramebuffers(1, &info.handle);
+    errdefer gl.deleteFramebuffers(1, &info.handle);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, info.handle);
+    defer gl.bindFramebuffer(gl.FRAMEBUFFER, 0);
+
+    info.texture_handle = try createTexture(params);
+
+    const textureInfo = textureLibrary.get(info.texture_handle) catch @panic("invalid handle");
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, textureInfo.handle, 0);
+
+    if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE)
+        return error.FramebufferInitFailed;
+
+    return try framebufferLibrary.add(info);
+}
+
 pub fn bindTexture(handle : TextureHandle) void
 {
     const info = textureLibrary.get(handle) catch @panic("invalid handle");
@@ -123,14 +152,48 @@ pub fn bindTexture(handle : TextureHandle) void
     gl.bindTexture(gl.TEXTURE_2D, info.handle);
 }
 
+pub fn getTextureInternalID(handle : TextureHandle) gl.GLuint
+{
+    const info = textureLibrary.get(handle) catch @panic("invalid handle");
+
+    return info.handle;
+}
+
+// if null, unbinds the framebuffer
+pub fn bindFramebuffer(handle : ?FramebufferHandle) void
+{
+    var gl_handle : gl.GLuint = 0;
+    if (handle) |handle_not_null|
+    {
+        const info = framebufferLibrary.get(handle_not_null) catch @panic("invalid handle");
+
+        gl_handle = info.handle;
+    }
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, gl_handle);
+}
+
+pub fn getFramebufferTexture(handle : FramebufferHandle) TextureHandle
+{
+    const info = framebufferLibrary.get(handle) catch @panic("invalid handle");
+    return info.texture_handle;
+}
+
 pub fn deinit() void
 {
+    is_init = false;
+
     for (textureLibrary.items) |textureInfo|
     {
         gl.deleteTextures(1, &textureInfo.handle);
     }
-
     textureLibrary.deinit();
+
+    for (framebufferLibrary.items) |framebufferInfo|
+    {
+        gl.deleteFramebuffers(1, &framebufferInfo.handle);
+    }
+    framebufferLibrary.deinit();
 }
 
 test "Texture loading" {
@@ -140,4 +203,12 @@ test "Texture loading" {
     defer context.deinit();
 
     _ = try loadTexture("data/checker.png", .{});
+}
+
+test "Framebuffer" {
+    const window = @import("window.zig");
+    var context = try window.Context.init(std.testing.allocator);
+    defer context.deinit();
+
+    _ = try createFramebuffer(.{.width = 600, .height = 400, .depth = .RGBA});
 }

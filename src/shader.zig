@@ -52,6 +52,12 @@ pub fn Shader(comptime uniform_struct : type) type {
             self.uniform_handler.bindUniforms(uniforms);
         }
 
+        pub fn deinit(self : *Self) void
+        {
+            gl.deleteProgram(self.shader_handle);
+            self.* = undefined;
+        }
+
         const Self = @This();
         const T = uniform_struct;
         const Handler = UniformHandler(T);

@@ -247,10 +247,7 @@ pub const Batch = struct {
     {
         const spr_info = try getFrameInfo(sprite, frame);
         
-        try self.buffer.ensureTotalCapacity(self.drawn_this_frame + 1);
-        self.buffer.expandToCapacity();
-
-        self.buffer.items[self.drawn_this_frame] = BufferInfo{
+        try self.drawQuad(BufferInfo{
             .x = x + @intToFloat(f32, spr_info.x_offset),
             .y = y + @intToFloat(f32, spr_info.y_offset),
             .w = spr_info.u1 - spr_info.u0,
@@ -259,7 +256,15 @@ pub const Batch = struct {
             .v0 = spr_info.v0,
             .u1 = spr_info.u1,
             .v1 = spr_info.v1,
-        };
+        });
+    }
+
+    pub fn drawQuad(self : *Self, quad_info : BufferInfo) !void
+    {
+        try self.buffer.ensureTotalCapacity(self.drawn_this_frame + 1);
+        self.buffer.expandToCapacity();
+
+        self.buffer.items[self.drawn_this_frame] = quad_info;
 
         self.drawn_this_frame += 1;
     }
@@ -301,12 +306,14 @@ pub const Batch = struct {
         }
     }
 
-    pub fn deinit(self : *Self) !void
+    pub fn deinit(self : *Self) void
     {
         gl.deleteVertexArrays(1, &self.vao);
+        self.buffer.deinit();
+        self.* = undefined;
     }
 
-    const BufferInfo = packed struct {
+    pub const BufferInfo = packed struct {
         x : f32 = 0,
         y : f32 = 0,
         w : i16 = 0,

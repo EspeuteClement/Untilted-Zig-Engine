@@ -28,9 +28,33 @@ pub fn bindCamera(camera : Camera) void {
 }
 
 
-pub fn Shader() type {
+pub fn Shader(comptime uniform_struct : type) type {
     return struct {
         shader_handle : gl.GLuint,
+
+        uniform_handler : Handler,
+
+        pub fn init(shader_id : gl.GLuint) Self
+        {
+            var self = Self{
+                .shader_handle = shader_id,
+                .uniform_handler = Handler.init(),
+            };
+
+            self.uniform_handler.initUniforms(self);
+
+            return self;
+        }
+
+        pub fn bind(self : *Self, uniforms : T) void
+        {
+            gl.useProgram(self.shader_handle);
+            self.uniform_handler.bindUniforms(uniforms);
+        }
+
+        const Self = @This();
+        const T = uniform_struct;
+        const Handler = UniformHandler(T);
     };
 }
 
@@ -44,6 +68,11 @@ fn UniformHandler(comptime T : type) type {
 
     return struct {
         uniforms_handles : [info.Struct.fields.len]gl.GLint,
+
+        fn init() Self
+        {
+            return Self{.uniforms_handles = undefined};
+        }
 
         fn initUniforms(self : *Self, shader : anytype) void
         {
@@ -77,15 +106,9 @@ test "Test Shaders" {
     var context = try window.Context.init(std.testing.allocator);
     defer context.deinit();
 
-    const S = Shader();
-    var s : S = undefined;
-    s.shader_handle = try glhelp.buildProgram(@embedFile("lessons/05.vert"), @embedFile("lessons/05.frag"));
 
-    const U = UniformHandler(TestShaderParams);
-    var u : U = undefined;
-    u.initUniforms(s);
+    const S = Shader(TestShaderParams);
+    var s = S.init(try glhelp.buildProgram(@embedFile("lessons/05.vert"), @embedFile("lessons/05.frag")));
 
-    u.bindUniforms(.{
-        .uCamera = makeCamera(0, 0, 640, 480),
-    });
+    s.bind(TestShaderParams{.uCamera = makeCamera(0, 0, 640, 480)});
 }

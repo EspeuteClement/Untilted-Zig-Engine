@@ -7,6 +7,7 @@ const glhelp = @import("glhelp.zig");
 
 const texture = @import("texture.zig");
 const sprite = @import("sprite.zig");
+const shader = @import("shader.zig");
 
 const c = @cImport({
     @cDefine("CIMGUI_DEFINE_ENUMS_AND_STRUCTS", "1");
@@ -37,23 +38,6 @@ fn onResize(window:glfw.Window, width:u32, height:u32) void
     //gl.viewport(0, 0, @intCast(gl.GLint, width), @intCast(gl.GLint, height));
 }
 
-const vertices : []const f32 = &[_]f32 {
-    1.0, 1.0, 0.0, 1.0,
-    1.0, -1.0, 0.0, 0.0,
-    -1.0, -1.0, 1.0, 0.0,
-    -1.0, 1.0, 1.0, 1.0,
-};
-
-const indices : []const gl.GLuint = &[_]gl.GLuint {
-    0,1,3,
-    1,2,3,
-};
-
-var vertex_buffer_object : gl.GLuint = undefined;
-var vertex_array_object : gl.GLuint = undefined;
-var element_buffer_object : gl.GLuint = undefined;
-
-
 pub const Context = struct {
     data : *Data = undefined,
     allocator : Allocator = undefined,
@@ -61,14 +45,13 @@ pub const Context = struct {
     pub const Data = struct {
         glfw_window : glfw.Window = undefined,
         game_buffer : texture.FramebufferHandle = undefined,
-        game_texture : gl.GLuint = 0,
-        game_renderbuffer : gl.GLuint = 0,
-
-        screen_shader : gl.GLuint = 0,
 
         config : Config = Config{},
 
         current_zoom : u8 = 1,
+
+        batch : sprite.Batch = undefined,
+        shader : shader.Shader(struct {uCamera : shader.Camera = undefined}) = undefined,
 
         const Config = struct {
             game_width : u32 = 640,
@@ -88,35 +71,6 @@ pub const Context = struct {
             .min_filter = .NEAREST,
             .mag_filter = .NEAREST,
         });
-    }
-
-    fn initFullscreenQuadVAO(self : *Context) !void
-    {
-        self.data.screen_shader = try glhelp.buildProgram(@embedFile("screenShader.vert"), @embedFile("screenShader.frag"));
-        errdefer gl.deleteProgram(self.data.screen_shader);
-
-        gl.genVertexArrays(1, &vertex_array_object);
-
-        gl.genBuffers(1, &vertex_buffer_object);
-        gl.genBuffers(1, &element_buffer_object);
-
-
-        gl.bindVertexArray(vertex_array_object);
-
-        gl.bindBuffer(gl.ARRAY_BUFFER, vertex_buffer_object);
-        gl.bufferData(gl.ARRAY_BUFFER, vertices.len * @sizeOf(f32), vertices.ptr, gl.STATIC_DRAW);
-
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, element_buffer_object);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices.len * @sizeOf(gl.GLuint), indices.ptr, gl.STATIC_DRAW);
-        
-
-        gl.vertexAttribPointer(0, 2, gl.FLOAT, gl.FALSE, 4 * @sizeOf(f32), null);
-        gl.vertexAttribPointer(1, 2, gl.FLOAT, gl.FALSE, 4 * @sizeOf(f32), @intToPtr(*anyopaque, 2*@sizeOf(f32)));
-
-        gl.enableVertexAttribArray(0);
-        gl.enableVertexAttribArray(1);
-
-        gl.bindVertexArray(0);
     }
 
     pub fn init(allocator : Allocator) !Context
@@ -177,10 +131,44 @@ pub const Context = struct {
 
         try self.initGameRenderbuffer();
 
-        // debug
-        try self.initFullscreenQuadVAO();
+        self.data.batch = try sprite.Batch.init(self.allocator);
+        errdefer self.data.batch.deinit();
+
+        self.data.batch.texture_handle = texture.getFramebufferTexture(self.data.game_buffer);
+        try self.data.batch.drawQuad(.{
+            .x = 0.0,
+            .y = 0.0,
+            .w = @intCast(i16, self.data.config.game_width),
+            .h = @intCast(i16, self.data.config.game_height),
+            .u0 = 0,
+            .v0 = @intCast(i16, self.data.config.game_height),
+            .u1 = @intCast(i16, self.data.config.game_width),
+            .v1 = 0,
+        });
+
+        self.data.shader = @TypeOf(self.data.shader).init(try glhelp.buildProgram(@embedFile("lessons/05.vert"), @embedFile("lessons/05.frag")));
+        errdefer self.data.shader.deinit();
 
         return self;
+    }
+
+    pub fn deinit(self : *Context) void
+    {
+        if (with_imgui)
+        {
+            c.ImGui_ImplOpenGL3_Shutdown();
+            c.ImGui_ImplGlfw_Shutdown();
+            c.igDestroyContext(null);
+        }
+
+        self.data.batch.deinit();
+        self.data.shader.deinit();
+
+        texture.deinit();
+        sprite.deinit();
+        self.data.glfw_window.destroy();
+        glfw.terminate();
+        self.allocator.destroy(self.data);
     }
 
     fn imguiGameRenderSizeConstraintCallback(data_ptr : [*c]c.ImGuiSizeCallbackData) callconv(.C) void
@@ -250,12 +238,11 @@ pub const Context = struct {
             {
                 gl.viewport(0,0, @intCast(gl.GLint, self.data.config.window_width), @intCast(gl.GLint, self.data.config.window_height));
 
-                gl.useProgram(self.data.screen_shader);
-                gl.bindVertexArray(vertex_array_object);
-                texture.bindTexture(texture.getFramebufferTexture(self.data.game_buffer));
-                gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, null);
+                self.data.shader.bind(.{
+                    .uCamera = shader.makeCamera(0, 0, @intToFloat(f32, self.data.config.game_width), @intToFloat(f32, self.data.config.game_height)),
+                });
 
-                gl.bindTexture(gl.TEXTURE_2D, 0);
+                try self.data.batch.renderNoClear();
             }
 
             if (with_imgui)
@@ -268,20 +255,7 @@ pub const Context = struct {
         }
     }
 
-    pub fn deinit(self : *Context) void
-    {
-        if (with_imgui)
-        {
-            c.ImGui_ImplOpenGL3_Shutdown();
-            c.ImGui_ImplGlfw_Shutdown();
-            c.igDestroyContext(null);
-        }
-        texture.deinit();
-        sprite.deinit();
-        self.data.glfw_window.destroy();
-        glfw.terminate();
-        self.allocator.destroy(self.data);
-    }
+
 };
 
 

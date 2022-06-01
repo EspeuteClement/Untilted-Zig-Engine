@@ -57,6 +57,9 @@ pub fn run(ctxt : window.Context) !void
 {
     _ = ctxt;
 
+
+    
+
     time += 1;
 
     const w = @intToFloat(f32, ctxt.data.config.game_width);

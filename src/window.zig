@@ -270,6 +270,12 @@ pub const Context = struct {
 
     pub fn deinit(self : *Context) void
     {
+        if (with_imgui)
+        {
+            c.ImGui_ImplOpenGL3_Shutdown();
+            c.ImGui_ImplGlfw_Shutdown();
+            c.igDestroyContext(null);
+        }
         texture.deinit();
         sprite.deinit();
         self.data.glfw_window.destroy();

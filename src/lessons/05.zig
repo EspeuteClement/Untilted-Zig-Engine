@@ -6,6 +6,7 @@ const stb = @import("../stbi.zig");
 const aseprite = @import("../aseprite.zig");
 const texture = @import("../texture.zig");
 const sprite = @import("../sprite.zig");
+const shader = @import("../shader.zig");
 
 var program : gl.GLuint = undefined;
 
@@ -30,7 +31,15 @@ const SpriteInfo = packed struct {
     v1 : i16 = 0,
 };
 
+const ShaderUniform = struct
+{
+    uCamera : shader.Camera = undefined,
+};
+
+
 var batch : sprite.Batch = undefined;
+
+var game_shader : shader.Shader(ShaderUniform) = undefined;
 
 pub fn init(ctxt : window.Context) !void
 {
@@ -39,28 +48,10 @@ pub fn init(ctxt : window.Context) !void
     batch = try sprite.Batch.init(ctxt.allocator);
     batch.texture_handle = try texture.loadTexture("data/leneth.png", .{});
 
-    program = try glhelp.buildProgram(@embedFile("05.vert"), @embedFile("05.frag"));
-
-    camera_uniform = gl.getUniformLocation(program, @as([*c]const gl.GLchar, "uCamera"));
-    if (camera_uniform < 0)
-        @panic("Couln't find uniform");
+    game_shader = @TypeOf(game_shader).init(try glhelp.buildProgram(@embedFile("05.vert"), @embedFile("05.frag")));
 }
 
 var time : usize = 0;
-
-pub fn makeCamera(x: f32, y:f32, w: f32, h: f32) [16]f32 {
-    const sx = -2.0/ w;
-    const tx = 1 + std.math.floor(x) / w * 2.0;
-    const sy = -2.0 / h;
-    const ty = 1 + std.math.floor(y) / h * 2.0;
-    
-    return [16]f32 {
-        sx ,0.0,0.0,tx,
-        0.0,sy ,0.0,ty,
-        0.0,0.0,1.0,0.0,
-        0.0,0.0,0.0,1.0
-    };
-}
 
 pub fn run(ctxt : window.Context) !void
 {
@@ -71,12 +62,11 @@ pub fn run(ctxt : window.Context) !void
     const w = @intToFloat(f32, ctxt.data.config.game_width);
     const h = @intToFloat(f32, ctxt.data.config.game_height);
     const fTime = @intToFloat(f32,time);
-    const mat = makeCamera(0.0, 0.0, w, h);
 
     try batch.drawSimple(.@"leneth", @divTrunc(time, 10) % 4, 150.0, 150.0);
 
     var i :usize = 0;
-    while (i < 10_000) 
+    while (i < 10) 
     {
         const fi = @intToFloat(f32, i);
         try batch.drawSimple(.@"leneth", @divTrunc(time+i, 10) % 4, 
@@ -90,9 +80,7 @@ pub fn run(ctxt : window.Context) !void
     gl.clearColor(0, 1, 1, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
-    gl.useProgram(program);
-
-    gl.uniformMatrix4fv(camera_uniform, 1, gl.TRUE, &mat[0]);
+    game_shader.bind(.{.uCamera = shader.makeCamera(0.0 + fTime, 0.0 + fTime, w, h)});
 
     try batch.render();
 }

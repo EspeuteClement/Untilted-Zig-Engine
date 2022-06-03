@@ -5,19 +5,18 @@ const texture = @import("texture.zig");
 
 const aseprite = @import("aseprite.zig");
 const gl = @import("gl");
+const meta = @import("meta.zig");
 
 pub const Spr = enum(usize) {
     @"leneth",
 };
 
-const spr_paths = r: {
-    var paths : [@typeInfo(Spr).Enum.fields.len][]const u8 = undefined;
-    for (@typeInfo(Spr).Enum.fields) |field, i|
-    {
-        paths[i] = field.name;
-    }
-    break :r paths;
-};
+fn sprPath(spr : Spr) []const u8
+{
+    return @typeInfo(Spr).Enum.fields[@enumToInt(spr)].name;
+}
+
+const spr_paths = meta.enumNames(Spr);
 
 const SpriteInfo = struct {
     frames : []FrameInfo = undefined,

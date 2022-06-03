@@ -1,7 +1,7 @@
 const std = @import("std");
 const glfw = @import("libs/mach-glfw/build.zig");
 
-const with_imgui = false;
+const with_imgui = true;
 
 pub fn build(b: *std.build.Builder) void {
     

@@ -2,6 +2,11 @@ const std = @import("std");
 const gl = @import("gl");
 const stb = @import("stbi.zig");
 
+const textures  = enum(u16) {
+    leneth,
+};
+
+const temporary_textures_start_id = 64;
 
 const Allocator = std.mem.Allocator;
 
@@ -16,8 +21,10 @@ const FramebufferInfo = struct {
     texture_handle : TextureHandle = undefined,
 };
 
-const TextureLibrary = Library(TextureInfo);
-pub const TextureHandle = TextureLibrary.Key;
+const TextureLibrary = std.ArrayList(TextureInfo);
+pub const TextureHandle = struct {
+    texture_id : u16 = undefined,
+};
 
 const FramebufferLibrary = Library(FramebufferInfo);
 pub const FramebufferHandle = FramebufferLibrary.Key;
@@ -32,8 +39,11 @@ pub fn init(allocator : Allocator) !void
     defer is_init = true;
 
     if (is_init) @panic("Already init");
-    textureLibrary = TextureLibrary.init(allocator);
+    textureLibrary = try TextureLibrary.initCapacity(allocator, 128);
+    textureLibrary.expandToCapacity();
     framebufferLibrary = FramebufferLibrary.init(allocator);
+
+    num_created_framebuffers = 0;
 }
 
 const LoadTextureParameters = struct {
@@ -54,7 +64,7 @@ pub fn loadTexture(path : [*c]const u8, params : LoadTextureParameters) !Texture
 
     defer stb.stbi_image_free(data);
 
-    return createTexture(.{
+    return createTexture(.{.texture_id = 0}, .{
         .width = @intCast(u16, x),
         .height = @intCast(u16, y),
         .depth = .RGBA,
@@ -99,7 +109,7 @@ const CreateTextureParams = struct {
     pixel_format : Depth = .RGBA,
 };
 
-pub fn createTexture(params : CreateTextureParams) !TextureHandle
+pub fn createTexture(id : TextureHandle, params : CreateTextureParams) !TextureHandle
 {
     var info = TextureInfo{};
 
@@ -120,9 +130,11 @@ pub fn createTexture(params : CreateTextureParams) !TextureHandle
 
     gl.bindTexture(gl.TEXTURE_2D, 0);
 
-    var handle = try textureLibrary.add(info);
-    return handle;
+    textureLibrary.items[@intCast(usize, id.texture_id)] = info;
+    return id;
 }
+
+var num_created_framebuffers : u16 = 0;
 
 pub fn createFramebuffer(params : CreateTextureParams) !FramebufferHandle
 {
@@ -134,10 +146,11 @@ pub fn createFramebuffer(params : CreateTextureParams) !FramebufferHandle
     gl.bindFramebuffer(gl.FRAMEBUFFER, info.handle);
     defer gl.bindFramebuffer(gl.FRAMEBUFFER, 0);
 
-    info.texture_handle = try createTexture(params);
+    info.texture_handle = try createTexture(.{.texture_id = num_created_framebuffers + temporary_textures_start_id}, params);
+    num_created_framebuffers += 1;
 
-    const textureInfo = textureLibrary.get(info.texture_handle) catch @panic("invalid handle");
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, textureInfo.handle, 0);
+    const textureInfo = getTextureInternalID(info.texture_handle);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, textureInfo, 0);
 
     if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE)
         return error.FramebufferInitFailed;
@@ -147,14 +160,14 @@ pub fn createFramebuffer(params : CreateTextureParams) !FramebufferHandle
 
 pub fn bindTexture(handle : TextureHandle) void
 {
-    const info = textureLibrary.get(handle) catch @panic("invalid handle");
+    const info = textureLibrary.items[@intCast(usize, handle.texture_id)];
 
     gl.bindTexture(gl.TEXTURE_2D, info.handle);
 }
 
 pub fn getTextureInternalID(handle : TextureHandle) gl.GLuint
 {
-    const info = textureLibrary.get(handle) catch @panic("invalid handle");
+    const info = textureLibrary.items[@intCast(usize, handle.texture_id)];
 
     return info.handle;
 }

@@ -39,16 +39,29 @@ inline fn ReadWriteFunc(comptime T : type, comptime mode : ReadWrite, value : br
                 .Read => value.* = try readwritter.readIntLittle(T),
             }
         },
+        .Enum => |enum_info| {
+            switch(mode)
+            {
+                .Write => try readwritter.writeIntLittle(enum_info.tag_type, @enumToInt(value)),
+                .Read => value.* = @intToEnum(T, try readwritter.readIntLittle(enum_info.tag_type)),
+            }
+        },
         else => @compileError("Unsuported type : " ++ @typeName(T)),
     }
 }
 
 test "Read Ints" {
+    const TestEnum = enum(u16) {
+        foo,
+        bar = 0xFF77,
+    };
+
     const TestStruct = struct {
         a : u8 = 123,
         b : u16 = 456,
         c : u32 = 98765432,
         d : u24 = 777,
+        e : TestEnum = .bar,
     };
 
     var initialValues : TestStruct = .{};
@@ -61,6 +74,6 @@ test "Read Ints" {
     stream.reset();
 
     var deserializedValues = try deserialise(TestStruct, stream.reader());
-    
+
     try std.testing.expectEqual(initialValues, deserializedValues);
 }

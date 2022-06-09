@@ -100,6 +100,15 @@ pub const Bitmap = struct {
         };
     }
 
+    pub fn copyFromU8(in_data : []const u8, in_width : u16, in_height : u16, allocator : Allocator) !Bitmap
+    {
+        return Bitmap{
+            .data = try allocator.dupe(Rgba, std.mem.bytesAsSlice(Rgba, in_data)),
+            .width = in_width,
+            .height = in_height,
+        };
+    }
+
     pub fn deinit(self : *Bitmap, allocator : Allocator) void
     {
         allocator.free(self.data);
@@ -172,13 +181,12 @@ pub const PngPacker = struct {
         return self;
     }
 
-    pub const trimBitmapReturn = struct {bitmap : []Rgba, x_offset : usize, y_offset : usize, width : usize, height : usize};
+    pub const trimBitmapReturn = struct {bitmap : Bitmap, x_offset : usize, y_offset : usize};
     // Allocates a copy of the given bitmap, removing as much borders as possible
-    pub fn trimBitmap(in_data : []const u8, in_width : usize, in_height : usize, allocator : Allocator) !trimBitmapReturn
+    pub fn trimBitmap(in_bitmap : Bitmap, allocator : Allocator) !trimBitmapReturn
     {
-        const bitmap = std.mem.bytesAsSlice(Rgba, in_data);
-        const width : isize = @intCast(isize,in_width);
-        const height : isize = @intCast(isize,in_height);
+        const width : isize = @intCast(isize,in_bitmap.width);
+        const height : isize = @intCast(isize,in_bitmap.height);
         var left : isize = 0;
         var top : isize = 0;
         var right : isize = width - 1;
@@ -192,7 +200,7 @@ pub const PngPacker = struct {
             var x : isize = 0;
             while(x < width)
             {
-                if (indexBitmap(bitmap, width, x, top).a != 0)
+                if (in_bitmap.getPixelUnchecked(@intCast(u16, x), @intCast(u16, top)).a != 0)
                 {
                     minRight = x;
                     minBottom = top;
@@ -209,7 +217,7 @@ pub const PngPacker = struct {
             var y : isize = height - 1;
             while(y > top)
             {
-                if (indexBitmap(bitmap, width, left, y).a != 0)
+                if (in_bitmap.getPixelUnchecked(@intCast(u16, left), @intCast(u16, y)).a != 0)
                 {
                     minBottom = y;
                     break :left_loop;
@@ -225,7 +233,7 @@ pub const PngPacker = struct {
             var x : isize = width - 1;
             while(x >= left)
             {
-                if (indexBitmap(bitmap, width, x, bottom).a != 0)
+                if (in_bitmap.getPixelUnchecked(@intCast(u16, x), @intCast(u16, bottom)).a != 0)
                 {
                     minRight = x;
                     break :bottom_loop;
@@ -241,7 +249,7 @@ pub const PngPacker = struct {
             var y : isize = bottom;
             while(y >= top)
             {
-                if (indexBitmap(bitmap, width, right, y).a != 0)
+                if (in_bitmap.getPixelUnchecked(@intCast(u16, right), @intCast(u16, y)).a != 0)
                 {
                     break :right_loop;
                 }
@@ -252,7 +260,9 @@ pub const PngPacker = struct {
 
         const final_w = @intCast(usize, right - left + 1);
         const final_h = @intCast(usize, bottom - top + 1);
-        const dest_buffer = try allocator.alloc(Rgba, @intCast(usize, final_w * final_h));
+
+        var out_bitmap = try Bitmap.init(@intCast(u16, final_w), @intCast(u16, final_h), allocator);
+        errdefer out_bitmap.deinit();
 
         {
             var y : usize = 0;
@@ -262,7 +272,7 @@ pub const PngPacker = struct {
                 var x : usize = 0;
                 while(x < final_w)
                 {
-                    dest_buffer[y*final_w + x] = indexBitmap(bitmap, width, @intCast(isize, x)+left, @intCast(isize, y)+top);
+                    out_bitmap.setPixelUnchecked(@intCast(u16,x), @intCast(u16, y), in_bitmap.getPixelUnchecked(@intCast(u16, @intCast(isize, x)+left), @intCast(u16, @intCast(isize, y)+top)));
                     x +=1;
                 }
 
@@ -270,7 +280,7 @@ pub const PngPacker = struct {
             }
         }
 
-        return trimBitmapReturn{.bitmap = dest_buffer, .x_offset = @intCast(usize, left), .y_offset = @intCast(usize, top), .width = @intCast(usize, final_w), .height = @intCast(usize, final_h)};
+        return trimBitmapReturn{.bitmap = out_bitmap, .x_offset = @intCast(usize, left), .y_offset = @intCast(usize, top)};
     }
 };
 
@@ -286,34 +296,24 @@ test "rect intersection" {
 
 test "build"
 {
-    const data align(@alignOf(Rgba)) = "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\xff\xff\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\xff\xff\x00\x00\x00\x00\xff\xff\xff\xff\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\xff\xff\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\xff\xff\x00\x00\x00\x00\xff\xff\xff\xff\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00";
+    var data align(@alignOf(Rgba)) = "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\xff\xff\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\xff\xff\x00\x00\x00\x00\xff\xff\xff\xff\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\xff\xff\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\xff\xff\x00\x00\x00\x00\xff\xff\xff\xff\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00";
+    var in_bitmap = try Bitmap.copyFromU8(data, 8, 8, std.testing.allocator);
+    defer in_bitmap.deinit(std.testing.allocator);
 
-    var ret = try PngPacker.trimBitmap(data, 8, 8, std.testing.allocator);
-    defer std.testing.allocator.free(ret.bitmap);
+    var ret = try PngPacker.trimBitmap(in_bitmap, std.testing.allocator);
+    defer ret.bitmap.deinit(std.testing.allocator);
 
     std.debug.print("\n", .{});
 
-    var y : isize = 0;
-    while (y < ret.height)
-    {
-        var x : isize = 0;
-        while (x < ret.width)
-        {
-            var char = if (indexBitmap(ret.bitmap, @intCast(isize, ret.width), x, y).a == 0) "." else "#";
-            std.debug.print("{s}", .{char});
-            x += 1;
-        }
-        std.debug.print("\n", .{});
-        y += 1;
-    }
+    ret.bitmap.debugPrint();
 
-    try std.testing.expectEqual(@as(usize, 3) , ret.width);
-    try std.testing.expectEqual(@as(usize, 4) ,ret.height);
+    try std.testing.expectEqual(@as(usize, 3) , ret.bitmap.width);
+    try std.testing.expectEqual(@as(usize, 4) ,ret.bitmap.height);
     try std.testing.expectEqual(@as(usize, 3), ret.x_offset);
     try std.testing.expectEqual(@as(usize, 2), ret.y_offset);
 
-    try std.testing.expect(indexBitmap(ret.bitmap, @intCast(isize, ret.width), 0, 0).a == 0);
-    try std.testing.expect(indexBitmap(ret.bitmap, @intCast(isize,ret.width), 1, 0).a != 0);
+    try std.testing.expect(ret.bitmap.getPixelUnchecked(0, 0).a == 0);
+    try std.testing.expect(ret.bitmap.getPixelUnchecked(1, 0).a != 0);
 }
 
 test "bitmap"

@@ -266,43 +266,39 @@ pub const PngPacker = struct {
         return self;
     }
 
-    fn dummyProcess(self : *PngPacker, dir : std.fs.Dir, file_path : []const u8) !void
-    {
+    fn dummyProcess(self: *PngPacker, dir: std.fs.Dir, file_path: []const u8) !void {
         _ = self;
-        _  = dir;
+        _ = dir;
         //var file = dir.openFile(entry.path, .{}) catch return;
-        var buffer : [256]u8 = [_]u8{0}**256;
+        var buffer: [256]u8 = [_]u8{0} ** 256;
 
         var real_path = try dir.realpath(file_path, buffer[0..buffer.len]);
 
         std.debug.print("found file {s}\n", .{real_path});
     }
 
-    pub fn findAllOfTypeAndDo(self : *PngPacker, dir : std.fs.Dir, extensions : []const[]const u8, process : fn(self : *PngPacker, dir : std.fs.Dir, file_path : []const u8) anyerror!void) anyerror!void
-    {
+    pub fn findAllOfTypeAndDo(self: *PngPacker, dir: std.fs.Dir, extensions: []const []const u8, process: fn (self: *PngPacker, dir: std.fs.Dir, file_path: []const u8) anyerror!void) anyerror!void {
         var dir_it = dir.iterate();
         while (try dir_it.next()) |entry| {
-            switch(entry.kind) {
+            switch (entry.kind) {
                 .File => {
-                    var matches : bool = m: {
+                    var matches: bool = m: {
                         if (extensions.len <= 0)
                             break :m false;
 
-                        for (extensions) |ext|
-                        {
+                        for (extensions) |ext| {
                             if (std.mem.endsWith(u8, entry.name, ext))
                                 break :m true;
                         }
                         break :m false;
                     };
 
-                    if (matches)
-                    {
+                    if (matches) {
                         try process(self, dir, entry.name);
                     }
                 },
                 .Directory => {
-                    const sub_dir = dir.openDir(entry.name, .{.iterate = true}) catch continue;
+                    const sub_dir = dir.openDir(entry.name, .{ .iterate = true }) catch continue;
                     try self.findAllOfTypeAndDo(sub_dir, extensions, process);
                 },
                 else => continue,
@@ -310,13 +306,13 @@ pub const PngPacker = struct {
         }
     }
 
-    pub fn work(self : *PngPacker, path : []const u8) !void{
-        var content_dir = try std.fs.cwd().openDir(path, .{.iterate = true});
+    pub fn work(self: *PngPacker, path: []const u8) !void {
+        var content_dir = try std.fs.cwd().openDir(path, .{ .iterate = true });
 
         try self.findAllOfTypeAndDo(content_dir, &[_][]const u8{".png"}, dummyProcess);
     }
 
-    pub fn deinit(self : *PngPacker) void{
+    pub fn deinit(self: *PngPacker) void {
         self.arena.deinit();
         self.* = undefined;
     }

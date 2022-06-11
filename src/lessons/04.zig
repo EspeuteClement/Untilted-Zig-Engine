@@ -5,22 +5,21 @@ const gl = @import("gl");
 const glhelp = @import("../glhelp.zig");
 const window = @import("../window.zig");
 
-const vert_source : [:0]const u8 = @embedFile("04.vert");
-const frag_source : [:0]const u8 = @embedFile("04.frag");
+const vert_source: [:0]const u8 = @embedFile("04.vert");
+const frag_source: [:0]const u8 = @embedFile("04.frag");
 
-const vertices : []const f32 = &[_]f32 {
+const vertices: []const f32 = &[_]f32{
     -0.5, -0.5, 0.0, 1.0, 0.0, 0.0,
-    0.5, -0.5, 0.0, 0.0, 1.0, 0.0,
-    0.0, 0.5, 0.0, 0.0, 0.0, 1.0,
+    0.5,  -0.5, 0.0, 0.0, 1.0, 0.0,
+    0.0,  0.5,  0.0, 0.0, 0.0, 1.0,
 };
 
-var vertex_buffer_object : gl.GLuint = undefined;
-var vertex_array_object : gl.GLuint = undefined;
+var vertex_buffer_object: gl.GLuint = undefined;
+var vertex_array_object: gl.GLuint = undefined;
 
-var shader_program : gl.GLuint = undefined;
+var shader_program: gl.GLuint = undefined;
 
-pub fn init(ctxt : window.Context) !void
-{
+pub fn init(ctxt: window.Context) !void {
     _ = ctxt;
 
     gl.genBuffers(1, &vertex_buffer_object);
@@ -30,7 +29,7 @@ pub fn init(ctxt : window.Context) !void
 
     gl.bindBuffer(gl.ARRAY_BUFFER, vertex_buffer_object);
     gl.bufferData(gl.ARRAY_BUFFER, vertices.len * @sizeOf(f32), vertices.ptr, gl.STATIC_DRAW);
-    
+
     shader_program = try glhelp.buildProgram(vert_source, frag_source);
 
     gl.vertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 6 * @sizeOf(f32), null);
@@ -42,8 +41,7 @@ pub fn init(ctxt : window.Context) !void
     gl.bindVertexArray(0);
 }
 
-pub fn run(ctxt : window.Context) !void
-{
+pub fn run(ctxt: window.Context) !void {
     _ = ctxt;
 
     gl.clearColor(0.2, 0.3, 0.3, 1.0);

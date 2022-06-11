@@ -1,13 +1,11 @@
 const gl = @import("gl");
 const window = @import("../window.zig");
 
-pub fn init(ctxt : window.Context) !void
-{
+pub fn init(ctxt: window.Context) !void {
     _ = ctxt;
 }
 
-pub fn run(ctxt : window.Context) !void
-{
+pub fn run(ctxt: window.Context) !void {
     _ = ctxt;
 
     gl.clearColor(1, 0, 1, 1);

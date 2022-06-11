@@ -1,14 +1,10 @@
 // Metaprogramming lib
 const std = @import("std");
 
-
-
-pub fn enumNames(comptime E : type) [@typeInfo(E).Enum.fields.len][]const u8
-{
+pub fn enumNames(comptime E: type) [@typeInfo(E).Enum.fields.len][]const u8 {
     comptime {
-        var paths : [@typeInfo(E).Enum.fields.len][]const u8 = undefined;
-        for (@typeInfo(E).Enum.fields) |field, i|
-        {
+        var paths: [@typeInfo(E).Enum.fields.len][]const u8 = undefined;
+        for (@typeInfo(E).Enum.fields) |field, i| {
             paths[i] = field.name;
         }
         return paths;
@@ -16,7 +12,7 @@ pub fn enumNames(comptime E : type) [@typeInfo(E).Enum.fields.len][]const u8
 }
 
 test "Enum Names" {
-    const TestEnum = enum {hello, world, foo, bar};
+    const TestEnum = enum { hello, world, foo, bar };
     const names = enumNames(TestEnum);
 
     try std.testing.expectEqualStrings(names[0], "hello");

@@ -5,11 +5,10 @@ const build_options = @import("build_options");
 
 const lesson = @import("lessons/05.zig");
 
-
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var allocator = gpa.allocator();
-    var context : window.Context = try window.Context.init(allocator);
+    var context: window.Context = try window.Context.init(allocator);
     defer context.deinit();
 
     try lesson.init(context);

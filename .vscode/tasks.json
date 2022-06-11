@@ -51,6 +51,27 @@
             },
             "group": {
                 "kind": "build",
+            }
+        },
+        {
+            "label": "zig test asset",
+            "type": "shell",
+            "command": "zig",
+            "args": [
+                "build",
+                "test-asset",
+                "--prominent-compile-errors",
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "silent",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": true
+            },
+            "group": {
+                "kind": "build",
                 "isDefault": true
             }
         }

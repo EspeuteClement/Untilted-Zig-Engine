@@ -33,8 +33,14 @@ pub fn build(b: *std.build.Builder) void {
     const exe_tests = b.addTest("src/main.zig");
     configure(exe_tests, b, target, mode, exe_options);
 
+    const asset_tests = b.addTest("src/asset_manager.zig");
+    configure(asset_tests, b, target, mode, exe_options);
+
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&exe_tests.step);
+
+    const test_asset_step = b.step("test-asset", "Run unit tests for asset packer");
+    test_asset_step.dependOn(&asset_tests.step);
 }
 
 fn makeExe(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std.builtin.Mode, exe_options: *std.build.OptionsStep, name: []const u8, root: []const u8, step_name: []const u8, step_desc: []const u8) struct { exe: *std.build.LibExeObjStep, run_cmd: *std.build.RunStep, run_step: *std.build.Step } {
@@ -86,7 +92,7 @@ fn configure(step: anytype, b: *std.build.Builder, target: std.zig.CrossTarget, 
 
     step.addIncludePath("libs/stb");
     step.addCSourceFile("libs/stb/stbi_impl.c", &[_][]const u8{"-std=c99"});
-    step.addCSourceFile("libs/stb/stb_rect_pack.c", &[_][]const u8{"-std=c99"});
+    step.addCSourceFile("libs/stb/stb_rect_pack.c", &[_][]const u8{"-std=c99", "-g"});
 
     glfw.link(b, step, .{});
 }

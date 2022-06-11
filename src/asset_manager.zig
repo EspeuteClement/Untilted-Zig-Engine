@@ -1,6 +1,8 @@
 const std = @import("std");
 const serialize = @import("serialize.zig");
 const window = @import("window.zig");
+const stb_rect_pack = @import("stb_rect_pack.zig");
+const stbi = @import("stbi.zig");
 
 const Allocator = std.mem.Allocator;
 
@@ -123,7 +125,7 @@ pub const Bitmap = struct {
     }
 
     inline fn idx(self: *const Bitmap, x: u16, y: u16) *Rgba {
-        const index: usize = @intCast(usize, x) + @intCast(usize, y * self.width);
+        const index: usize = @intCast(usize, x) + @intCast(usize, y) * @intCast(usize,self.width);
         return &self.data[index];
     }
 
@@ -257,16 +259,30 @@ pub const Bitmap = struct {
 
 pub const PngPacker = struct {
     allocator: Allocator = undefined,
-    arena: std.heap.ArenaAllocator = undefined,
+    bitmap_to_pack_arena: std.heap.ArenaAllocator = undefined,
+
+    packing_data: std.MultiArrayList(PackingData) = .{},
+
+    const PackingData = struct {
+        bitmap : Bitmap,
+        rect : Rect,
+        pack_rect : stb_rect_pack.Rect
+    };
 
     pub fn init(allocator: Allocator) PngPacker {
         var self = PngPacker{};
         self.allocator = allocator;
-        self.arena = std.heap.ArenaAllocator.init(self.allocator);
+        self.bitmap_to_pack_arena = std.heap.ArenaAllocator.init(allocator);
         return self;
     }
 
-    fn dummyProcess(self: *PngPacker, dir: std.fs.Dir, file_path: []const u8) !void {
+    pub fn deinit(self: *PngPacker) void {
+        self.bitmap_to_pack_arena.deinit();
+        self.packing_data.deinit(self.allocator);
+        self.* = undefined;
+    }
+
+    fn preProcessImageForAtlas(self: *PngPacker, dir: std.fs.Dir, file_path: []const u8) !void {
         _ = self;
         _ = dir;
         //var file = dir.openFile(entry.path, .{}) catch return;
@@ -275,6 +291,28 @@ pub const PngPacker = struct {
         var real_path = try dir.realpath(file_path, buffer[0..buffer.len]);
 
         std.debug.print("found file {s}\n", .{real_path});
+
+        var bytes = try dir.readFileAlloc(self.allocator, file_path, 4_000_000);
+        defer self.allocator.free(bytes);
+
+        var bitmap = try stbi.loadFromMemory(bytes, self.allocator);
+        defer bitmap.deinit(self.allocator);
+
+        var trimmed_bitmap_info = try bitmap.getTrimmedCopy(self.bitmap_to_pack_arena.allocator());
+
+        try self.packing_data.append(self.allocator, .{
+            .bitmap = trimmed_bitmap_info.bitmap, 
+            .rect = trimmed_bitmap_info.rect, 
+            .pack_rect = .{
+                .id = @intCast(c_int, self.packing_data.len),
+                .w = @intCast(c_int, trimmed_bitmap_info.rect.w),
+                .h = @intCast(c_int, trimmed_bitmap_info.rect.h),
+                .x = 0,
+                .y = 0,
+                .was_packed = 0,
+                }
+            }
+        );
     }
 
     pub fn findAllOfTypeAndDo(self: *PngPacker, dir: std.fs.Dir, extensions: []const []const u8, process: fn (self: *PngPacker, dir: std.fs.Dir, file_path: []const u8) anyerror!void) anyerror!void {
@@ -309,13 +347,42 @@ pub const PngPacker = struct {
     pub fn work(self: *PngPacker, path: []const u8) !void {
         var content_dir = try std.fs.cwd().openDir(path, .{ .iterate = true });
 
-        try self.findAllOfTypeAndDo(content_dir, &[_][]const u8{".png"}, dummyProcess);
+        try self.findAllOfTypeAndDo(content_dir, &[_][]const u8{".png"}, preProcessImageForAtlas);
+
+        {
+            const w = 4096;
+            const h = 4096;
+            var packer = try stb_rect_pack.Packer.init(w,h, self.allocator);
+            defer packer.deinit(self.allocator);
+
+            var out_bitmap = try Bitmap.init(w, h, self.allocator);
+            defer out_bitmap.deinit(self.allocator);
+
+            out_bitmap.clear();
+
+            var pack_rects = self.packing_data.items(.pack_rect);
+            _ = packer.packRects(pack_rects);
+
+            var i : isize = @intCast(isize, self.packing_data.len)-1;
+            while(i >= 0)
+            {
+                var data : PackingData = self.packing_data.get(@intCast(usize, i));
+                if (data.pack_rect.was_packed != 0) {
+
+                    out_bitmap.blit(data.bitmap, data.bitmap.getRect(), @intCast(i16, data.pack_rect.x), @intCast(i16, data.pack_rect.y));
+                }
+
+                i -= 1;
+            }
+
+            std.debug.print("Finisehd packing\n",.{});
+            stbi.saveToPng("testAtlasPack.png", out_bitmap);
+            std.debug.print("Finisehd writing\n",.{});
+            
+        }
     }
 
-    pub fn deinit(self: *PngPacker) void {
-        self.arena.deinit();
-        self.* = undefined;
-    }
+
 };
 
 test "rect intersection" {
@@ -384,10 +451,16 @@ test "find all" {
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var allocator = gpa.allocator();
-    var context: window.Context = try window.Context.init(allocator);
-    defer context.deinit();
+    // var context: window.Context = try window.Context.init(allocator);
+    // defer context.deinit();
 
-    try context.run(run);
+    std.debug.print("\n", .{});
+    var pack = PngPacker.init(allocator);
+    defer pack.deinit();
+
+    try pack.work("data");
+
+    // try context.run(run);
 }
 
 pub fn run(ctxt: window.Context) !void {

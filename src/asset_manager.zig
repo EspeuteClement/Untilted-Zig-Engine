@@ -201,24 +201,11 @@ pub const Bitmap = struct {
         return .{.x =  0, .y = 0, .w = @intCast(i16, self.width), .h = @intCast(i16,self.height)};
     }
 
-};
-
-pub const PngPacker = struct {
-    allocator : Allocator = undefined,
-
-    pub fn init(allocator : Allocator) void
+    // return the smallest rectangle that contains all the non fully transparent pixels of this bitmap
+    pub fn getTrimmedRect(self : Bitmap) Rect
     {
-        var self = PngPacker{};
-        self.allocator = allocator;
-        return self;
-    }
-
-    pub const trimBitmapReturn = struct {bitmap : Bitmap, x_offset : usize, y_offset : usize};
-    // Allocates a copy of the given bitmap, removing as much borders as possible
-    pub fn trimBitmap(in_bitmap : Bitmap, allocator : Allocator) !trimBitmapReturn
-    {
-        const width : isize = @intCast(isize,in_bitmap.width);
-        const height : isize = @intCast(isize,in_bitmap.height);
+        const width : isize = @intCast(isize,self.width);
+        const height : isize = @intCast(isize,self.height);
         var left : isize = 0;
         var top : isize = 0;
         var right : isize = width - 1;
@@ -232,7 +219,7 @@ pub const PngPacker = struct {
             var x : isize = 0;
             while(x < width)
             {
-                if (in_bitmap.getPixelUnchecked(@intCast(u16, x), @intCast(u16, top)).a != 0)
+                if (self.getPixelUnchecked(@intCast(u16, x), @intCast(u16, top)).a != 0)
                 {
                     minRight = x;
                     minBottom = top;
@@ -249,7 +236,7 @@ pub const PngPacker = struct {
             var y : isize = height - 1;
             while(y > top)
             {
-                if (in_bitmap.getPixelUnchecked(@intCast(u16, left), @intCast(u16, y)).a != 0)
+                if (self.getPixelUnchecked(@intCast(u16, left), @intCast(u16, y)).a != 0)
                 {
                     minBottom = y;
                     break :left_loop;
@@ -265,7 +252,7 @@ pub const PngPacker = struct {
             var x : isize = width - 1;
             while(x >= left)
             {
-                if (in_bitmap.getPixelUnchecked(@intCast(u16, x), @intCast(u16, bottom)).a != 0)
+                if (self.getPixelUnchecked(@intCast(u16, x), @intCast(u16, bottom)).a != 0)
                 {
                     minRight = x;
                     break :bottom_loop;
@@ -281,7 +268,7 @@ pub const PngPacker = struct {
             var y : isize = bottom;
             while(y >= top)
             {
-                if (in_bitmap.getPixelUnchecked(@intCast(u16, right), @intCast(u16, y)).a != 0)
+                if (self.getPixelUnchecked(@intCast(u16, right), @intCast(u16, y)).a != 0)
                 {
                     break :right_loop;
                 }
@@ -293,27 +280,35 @@ pub const PngPacker = struct {
         const final_w = @intCast(usize, right - left + 1);
         const final_h = @intCast(usize, bottom - top + 1);
 
-        var out_bitmap = try Bitmap.init(@intCast(u16, final_w), @intCast(u16, final_h), allocator);
+        return .{.x = @intCast(i16, left), .y = @intCast(i16, top), .w = @intCast(i16, final_w), .h = @intCast(i16, final_h)};
+    }
+
+    const GetTrimmedCopyReturn = struct{bitmap : Bitmap, rect : Rect};
+    // Allocates a copy of the given bitmap, removing as much borders as possible
+    pub fn getTrimmedCopy(self : Bitmap, allocator : Allocator) !GetTrimmedCopyReturn
+    {
+        const trimmed_rect = self.getTrimmedRect();
+
+        var out_bitmap = try Bitmap.init(@intCast(u16, trimmed_rect.w), @intCast(u16, trimmed_rect.h), allocator);
         errdefer out_bitmap.deinit();
 
-        {
-            var y : usize = 0;
+        out_bitmap.blit(self, trimmed_rect, 0,0);
 
-            while(y < final_h)
-            {
-                var x : usize = 0;
-                while(x < final_w)
-                {
-                    out_bitmap.setPixelUnchecked(@intCast(u16,x), @intCast(u16, y), in_bitmap.getPixelUnchecked(@intCast(u16, @intCast(isize, x)+left), @intCast(u16, @intCast(isize, y)+top)));
-                    x +=1;
-                }
-
-                y += 1;
-            }
-        }
-
-        return trimBitmapReturn{.bitmap = out_bitmap, .x_offset = @intCast(usize, left), .y_offset = @intCast(usize, top)};
+        return GetTrimmedCopyReturn{.bitmap = out_bitmap, .rect = trimmed_rect};
     }
+
+};
+
+pub const PngPacker = struct {
+    allocator : Allocator = undefined,
+
+    pub fn init(allocator : Allocator) void
+    {
+        var self = PngPacker{};
+        self.allocator = allocator;
+        return self;
+    }
+    
 };
 
 test "rect intersection" {
@@ -334,17 +329,17 @@ test "build"
     var in_bitmap = try Bitmap.copyFromU8(test_data, 8, 8, std.testing.allocator);
     defer in_bitmap.deinit(std.testing.allocator);
 
-    var ret = try PngPacker.trimBitmap(in_bitmap, std.testing.allocator);
+    var ret = try in_bitmap.getTrimmedCopy(std.testing.allocator);
     defer ret.bitmap.deinit(std.testing.allocator);
 
     std.debug.print("\n", .{});
 
     ret.bitmap.debugPrint();
 
-    try std.testing.expectEqual(@as(usize, 3) , ret.bitmap.width);
-    try std.testing.expectEqual(@as(usize, 4) ,ret.bitmap.height);
-    try std.testing.expectEqual(@as(usize, 3), ret.x_offset);
-    try std.testing.expectEqual(@as(usize, 2), ret.y_offset);
+    try std.testing.expectEqual(@as(i16, 3) , ret.rect.w);
+    try std.testing.expectEqual(@as(i16, 4) ,ret.rect.h);
+    try std.testing.expectEqual(@as(i16, 3), ret.rect.x);
+    try std.testing.expectEqual(@as(i16, 2), ret.rect.y);
 
     try std.testing.expect(ret.bitmap.getPixelUnchecked(0, 0).a == 0);
     try std.testing.expect(ret.bitmap.getPixelUnchecked(1, 0).a != 0);

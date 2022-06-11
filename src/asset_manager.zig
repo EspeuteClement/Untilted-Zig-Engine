@@ -257,11 +257,68 @@ pub const Bitmap = struct {
 
 pub const PngPacker = struct {
     allocator: Allocator = undefined,
+    arena: std.heap.ArenaAllocator = undefined,
 
-    pub fn init(allocator: Allocator) void {
+    pub fn init(allocator: Allocator) PngPacker {
         var self = PngPacker{};
         self.allocator = allocator;
+        self.arena = std.heap.ArenaAllocator.init(self.allocator);
         return self;
+    }
+
+    fn dummyProcess(self : *PngPacker, dir : std.fs.Dir, file_path : []const u8) !void
+    {
+        _ = self;
+        _  = dir;
+        //var file = dir.openFile(entry.path, .{}) catch return;
+        var buffer : [256]u8 = [_]u8{0}**256;
+
+        var real_path = try dir.realpath(file_path, buffer[0..buffer.len]);
+
+        std.debug.print("found file {s}\n", .{real_path});
+    }
+
+    pub fn findAllOfTypeAndDo(self : *PngPacker, dir : std.fs.Dir, extensions : []const[]const u8, process : fn(self : *PngPacker, dir : std.fs.Dir, file_path : []const u8) anyerror!void) anyerror!void
+    {
+        var dir_it = dir.iterate();
+        while (try dir_it.next()) |entry| {
+            switch(entry.kind) {
+                .File => {
+                    var matches : bool = m: {
+                        if (extensions.len <= 0)
+                            break :m false;
+
+                        for (extensions) |ext|
+                        {
+                            if (std.mem.endsWith(u8, entry.name, ext))
+                                break :m true;
+                        }
+                        break :m false;
+                    };
+
+                    if (matches)
+                    {
+                        try process(self, dir, entry.name);
+                    }
+                },
+                .Directory => {
+                    const sub_dir = dir.openDir(entry.name, .{.iterate = true}) catch continue;
+                    try self.findAllOfTypeAndDo(sub_dir, extensions, process);
+                },
+                else => continue,
+            }
+        }
+    }
+
+    pub fn work(self : *PngPacker, path : []const u8) !void{
+        var content_dir = try std.fs.cwd().openDir(path, .{.iterate = true});
+
+        try self.findAllOfTypeAndDo(content_dir, &[_][]const u8{".png"}, dummyProcess);
+    }
+
+    pub fn deinit(self : *PngPacker) void{
+        self.arena.deinit();
+        self.* = undefined;
     }
 };
 
@@ -318,6 +375,14 @@ test "blit" {
     bitmap.blit(in_bitmap, in_bitmap.getRect(), 10, 10);
 
     bitmap.debugPrint();
+}
+
+test "find all" {
+    std.debug.print("\n", .{});
+    var pack = PngPacker.init(std.testing.allocator);
+    defer pack.deinit();
+
+    try pack.work("data");
 }
 
 pub fn main() !void {

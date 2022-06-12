@@ -6,7 +6,6 @@ zig-out/
 /build/
 /build-*/
 /docgen_tmp/
-__test_packing_data/
 
 # Vs code/studio temporary files
 .vs/*
@@ -18,3 +17,6 @@ __test_packing_data/
 *.gen.zig
 
 imgui.ini
+
+__test_packing_data/
+package/

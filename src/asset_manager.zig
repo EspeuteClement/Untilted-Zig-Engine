@@ -1,9 +1,11 @@
 const std = @import("std");
 const serialize = @import("serialize.zig");
-const window = @import("window.zig");
+//const window = @import("window.zig");
 const stb_rect_pack = @import("stb_rect_pack.zig");
 const stbi = @import("stbi.zig");
 const zigimg = @import("zigimg");
+
+const with_test_data = @import("build_options").test_packing_data;
 
 const Allocator = std.mem.Allocator;
 
@@ -258,15 +260,27 @@ pub const Bitmap = struct {
     }
 };
 
+const SpriteData = struct {
+    spritesheet_x : u16 = undefined,
+    spritesheet_y : u16 = undefined,
+    offset_x : u16 = undefined,
+    offset_y : u16 = undefined,
+    width : u16 = undefined,
+    height : u16 = undefined,
+};
+
+
 pub const PngPacker = struct {
     allocator: Allocator = undefined,
     bitmap_to_pack_arena: std.heap.ArenaAllocator = undefined,
 
     packing_data: std.MultiArrayList(PackingData) = .{},
+    packing_sprite_data : std.ArrayListUnmanaged(SpriteData) = undefined,
+
+
 
     const PackingData = struct {
         bitmap : Bitmap,
-        rect : Rect,
         pack_rect : stb_rect_pack.Rect
     };
 
@@ -274,24 +288,20 @@ pub const PngPacker = struct {
         var self = PngPacker{};
         self.allocator = allocator;
         self.bitmap_to_pack_arena = std.heap.ArenaAllocator.init(allocator);
+        self.packing_sprite_data = .{};
         return self;
     }
 
     pub fn deinit(self: *PngPacker) void {
         self.bitmap_to_pack_arena.deinit();
         self.packing_data.deinit(self.allocator);
+        self.packing_sprite_data.deinit(self.allocator);
         self.* = undefined;
     }
 
     fn preProcessImageForAtlas(self: *PngPacker, dir: std.fs.Dir, file_path: []const u8) !void {
         _ = self;
         _ = dir;
-        //var file = dir.openFile(entry.path, .{}) catch return;
-        var buffer: [256]u8 = [_]u8{0} ** 256;
-
-        var real_path = try dir.realpath(file_path, buffer[0..buffer.len]);
-
-        std.debug.print("found file {s}\n", .{real_path});
 
         var bytes = try dir.readFileAlloc(self.allocator, file_path, 4_000_000);
         defer self.allocator.free(bytes);
@@ -310,7 +320,6 @@ pub const PngPacker = struct {
 
         try self.packing_data.append(self.allocator, .{
             .bitmap = trimmed_bitmap_info.bitmap, 
-            .rect = trimmed_bitmap_info.rect, 
             .pack_rect = .{
                 .id = @intCast(c_int, self.packing_data.len),
                 .w = @intCast(c_int, trimmed_bitmap_info.rect.w),
@@ -321,9 +330,18 @@ pub const PngPacker = struct {
                 }
             }
         );
+
+        try self.packing_sprite_data.append(self.allocator,
+            .{.width = trimmed_bitmap_info.bitmap.width,
+            .height = trimmed_bitmap_info.bitmap.height,
+            .offset_x = @intCast(u16, trimmed_bitmap_info.rect.x), 
+            .offset_y = @intCast(u16, trimmed_bitmap_info.rect.y),
+        });
     }
 
-    pub fn findAllOfTypeAndDo(self: *PngPacker, dir: std.fs.Dir, extensions: []const []const u8, process: fn (self: *PngPacker, dir: std.fs.Dir, file_path: []const u8) anyerror!void) anyerror!void {
+    // Returns the number of parsed files
+    pub fn findAllOfTypeAndDo(self: *PngPacker, dir: std.fs.Dir, extensions: []const []const u8, process: fn (self: *PngPacker, dir: std.fs.Dir, file_path: []const u8) anyerror!void) anyerror!usize {
+        var num_files : usize = 0;
         var dir_it = dir.iterate();
         while (try dir_it.next()) |entry| {
             switch (entry.kind) {
@@ -341,21 +359,30 @@ pub const PngPacker = struct {
 
                     if (matches) {
                         try process(self, dir, entry.name);
+                        num_files += 1;
                     }
                 },
                 .Directory => {
+                    if (!with_test_data and std.mem.eql(u8, entry.name, "__test_packing_data"))
+                        continue;
                     const sub_dir = dir.openDir(entry.name, .{ .iterate = true }) catch continue;
-                    try self.findAllOfTypeAndDo(sub_dir, extensions, process);
+                    num_files += try self.findAllOfTypeAndDo(sub_dir, extensions, process);
                 },
                 else => continue,
             }
         }
+
+        return num_files;
     }
 
     pub fn work(self: *PngPacker, path: []const u8) !void {
+        var timer = try std.time.Timer.start();
+
         var content_dir = try std.fs.cwd().openDir(path, .{ .iterate = true });
 
-        try self.findAllOfTypeAndDo(content_dir, &[_][]const u8{".png"}, preProcessImageForAtlas);
+        const num_files = try self.findAllOfTypeAndDo(content_dir, &[_][]const u8{".png"}, preProcessImageForAtlas);
+
+        std.debug.print("Parsed {d} images in {d:6.4}s\n", .{num_files, @intToFloat(f32, timer.lap()) / std.time.ns_per_s});
 
         {
             const w = 4096;
@@ -376,22 +403,49 @@ pub const PngPacker = struct {
             {
                 var data : PackingData = self.packing_data.get(@intCast(usize, i));
                 if (data.pack_rect.was_packed != 0) {
-
+                    var sprite_data = &self.packing_sprite_data.items[@intCast(usize, data.pack_rect.id)];
+                    sprite_data.spritesheet_x = @intCast(u16, data.pack_rect.x);
+                    sprite_data.spritesheet_y = @intCast(u16, data.pack_rect.y);
                     out_bitmap.blit(data.bitmap, data.bitmap.getRect(), @intCast(i16, data.pack_rect.x), @intCast(i16, data.pack_rect.y));
                 }
 
                 i -= 1;
             }
+            std.debug.print("Packed atlas in {d:6.4}s\n", .{@intToFloat(f32, timer.lap()) / std.time.ns_per_s});
 
-            std.debug.print("Finisehd packing\n",.{});
+            {
+                var array = std.ArrayList(u8).init(self.allocator);
+                defer array.deinit();
 
-            var img = zigimg.Image.init(self.allocator);
-            defer img.deinit();
-            img.pixels.?.rgba32 = std.mem.bytesAsSlice([]zigimg.color.Rgba32, @alignCast(4, std.mem.sliceAsBytes(out_bitmap.data)));
-            img.writeToFilePath("testAtlasPack.qoi", .qoi, .{});
+                var writer = array.writer();
 
-            std.debug.print("Finisehd writing\n",.{});
-            
+                for (self.packing_sprite_data.items) |data|
+                {
+                    try serialize.serialise(data, writer);
+                }
+
+                try std.fs.cwd().writeFile("testData.bin", array.items);
+            }
+            std.debug.print("Writen sprite data in {d:6.4}s\n", .{@intToFloat(f32, timer.lap()) / std.time.ns_per_s});
+
+            {
+                var img = zigimg.Image.init(self.allocator);
+
+                img.width = @intCast(usize, out_bitmap.width);
+                img.height = @intCast(usize, out_bitmap.height);
+
+                img.pixels = .{.rgba32 = @ptrCast([*]zigimg.color.Rgba32, out_bitmap.data.ptr)[0..out_bitmap.data.len]};
+                //try img.writeToFilePath("testAtlasPack.qoi", .qoi, .{.qoi = .{.colorspace = .linear}});
+
+                var buffer = try self.allocator.alloc(u8, 50_000_000);
+                defer self.allocator.free(buffer);
+                var out_buffer = try img.writeToMemory(buffer, .qoi, .{.qoi = .{.colorspace = .linear}});
+
+                try std.fs.cwd().writeFile("testAtlas.qoi", out_buffer);
+
+                std.debug.print("Finished writing atlas to disk in {d:6.4}s\n", .{@intToFloat(f32, timer.lap()) / std.time.ns_per_s});
+
+            }
         }
     }
 
@@ -463,9 +517,8 @@ test "find all" {
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.debug.assert(!gpa.deinit());
     var allocator = gpa.allocator();
-    // var context: window.Context = try window.Context.init(allocator);
-    // defer context.deinit();
 
     std.debug.print("\n", .{});
     var pack = PngPacker.init(allocator);
@@ -473,9 +526,4 @@ pub fn main() !void {
 
     try pack.work("data");
 
-    // try context.run(run);
-}
-
-pub fn run(ctxt: window.Context) !void {
-    _ = ctxt;
 }

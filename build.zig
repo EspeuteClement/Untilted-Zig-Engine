@@ -1,7 +1,8 @@
 const std = @import("std");
 const glfw = @import("libs/mach-glfw/build.zig");
 
-const with_imgui = true;
+const with_imgui = false;
+const test_packing_data = false;
 
 pub fn build(b: *std.build.Builder) void {
 
@@ -17,6 +18,8 @@ pub fn build(b: *std.build.Builder) void {
 
     const exe_options = b.addOptions();
     exe_options.addOption(bool, "with_imgui", with_imgui);
+    exe_options.addOption(bool, "test_packing_data", test_packing_data);
+
 
     // const exe_options = b.addOptions();
 
@@ -61,6 +64,7 @@ fn makeExe(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std.builtin
 }
 
 fn configure(step: anytype, b: *std.build.Builder, target: std.zig.CrossTarget, mode: std.builtin.Mode, options: *std.build.OptionsStep) void {
+    _ = b;
     step.setTarget(target);
     step.setBuildMode(mode);
 
@@ -93,7 +97,7 @@ fn configure(step: anytype, b: *std.build.Builder, target: std.zig.CrossTarget, 
 
     step.addIncludePath("libs/stb");
     step.addCSourceFile("libs/stb/stbi_impl.c", &[_][]const u8{"-std=c99"});
-    step.addCSourceFile("libs/stb/stb_rect_pack.c", &[_][]const u8{"-std=c99", "-g"});
+    step.addCSourceFile("libs/stb/stb_rect_pack.c", &[_][]const u8{"-std=c99"});
 
     glfw.link(b, step, .{});
 }

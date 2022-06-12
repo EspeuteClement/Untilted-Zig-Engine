@@ -69,6 +69,7 @@ fn configure(step: anytype, b: *std.build.Builder, target: std.zig.CrossTarget, 
 
     step.addPackagePath("glfw", "libs/mach-glfw/src/main.zig");
     step.addPackagePath("gl", "libs/gl/gl_3v3.zig");
+    step.addPackagePath("zigimg", "libs/zigimg/zigimg.zig");
 
     // Imgui Part
     const cimgui_path = "libs/imgui/";

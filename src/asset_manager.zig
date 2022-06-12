@@ -3,6 +3,7 @@ const serialize = @import("serialize.zig");
 const window = @import("window.zig");
 const stb_rect_pack = @import("stb_rect_pack.zig");
 const stbi = @import("stbi.zig");
+const zigimg = @import("zigimg");
 
 const Allocator = std.mem.Allocator;
 
@@ -295,8 +296,15 @@ pub const PngPacker = struct {
         var bytes = try dir.readFileAlloc(self.allocator, file_path, 4_000_000);
         defer self.allocator.free(bytes);
 
-        var bitmap = try stbi.loadFromMemory(bytes, self.allocator);
+        var image = try zigimg.Image.fromMemory(self.allocator, bytes);
+        defer image.deinit();
+        std.debug.assert(image.pixels.? == .rgba32);
+
+
+        var bitmap = try Bitmap.copyFromU8(try image.rawBytes(), @intCast(u16, image.width), @intCast(u16, image.height), self.allocator);
         defer bitmap.deinit(self.allocator);
+
+        // Note : we don't deinit here because the memory is owned by image, not us
 
         var trimmed_bitmap_info = try bitmap.getTrimmedCopy(self.bitmap_to_pack_arena.allocator());
 
@@ -376,7 +384,12 @@ pub const PngPacker = struct {
             }
 
             std.debug.print("Finisehd packing\n",.{});
-            stbi.saveToPng("testAtlasPack.png", out_bitmap);
+
+            var img = zigimg.Image.init(self.allocator);
+            defer img.deinit();
+            img.pixels.?.rgba32 = std.mem.bytesAsSlice([]zigimg.color.Rgba32, @alignCast(4, std.mem.sliceAsBytes(out_bitmap.data)));
+            img.writeToFilePath("testAtlasPack.qoi", .qoi, .{});
+
             std.debug.print("Finisehd writing\n",.{});
             
         }

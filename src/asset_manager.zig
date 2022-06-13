@@ -266,7 +266,7 @@ pub const PngPacker = struct {
     bitmap_to_pack_arena: std.heap.ArenaAllocator = undefined,
 
     packing_data: std.MultiArrayList(PackingData) = .{},
-    packing_sprite_data : std.ArrayListUnmanaged(sprite.FrameInfo) = undefined,
+    packing_sprite_data : std.ArrayListUnmanaged(sprite.SpriteInfo) = undefined,
 
 
 

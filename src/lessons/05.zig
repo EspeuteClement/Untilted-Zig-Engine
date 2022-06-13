@@ -31,7 +31,7 @@ pub fn init(ctxt: window.Context) !void {
     _ = ctxt;
 
     batch = try sprite.Batch.init(ctxt.allocator);
-    batch.texture_handle = try texture.loadTexture("data/leneth.png", .{});
+    batch.texture_handle = try texture.loadTexture("asset-build/testAtlas.qoi", .{});
 
     game_shader = @TypeOf(game_shader).init(try glhelp.buildProgram(@embedFile("05.vert"), @embedFile("05.frag")));
 }

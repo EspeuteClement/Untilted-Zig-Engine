@@ -1,6 +1,6 @@
 const std = @import("std");
 const gl = @import("gl");
-const stb = @import("stbi.zig");
+const zigimg = @import("zigimg");
 
 const textures = enum(u16) {
     leneth,
@@ -34,8 +34,12 @@ var framebufferLibrary: FramebufferLibrary = undefined;
 
 var is_init = false;
 
+var local_allocator : Allocator = undefined;
+
 pub fn init(allocator: Allocator) !void {
     defer is_init = true;
+
+    local_allocator = allocator;
 
     if (is_init) @panic("Already init");
     textureLibrary = try TextureLibrary.initCapacity(allocator, 128);
@@ -47,23 +51,17 @@ pub fn init(allocator: Allocator) !void {
 
 const LoadTextureParameters = struct {};
 
-pub fn loadTexture(path: [*c]const u8, params: LoadTextureParameters) !TextureHandle {
+pub fn loadTexture(path: []const u8, params: LoadTextureParameters) !TextureHandle {
     _ = params;
-    var x: c_int = undefined;
-    var y: c_int = undefined;
-    var n: c_int = undefined;
 
-    var data: [*c]u8 = stb.stbi_load(path, &x, &y, &n, 4);
-    if (data == null)
-        return error.StbiLoadFail;
-
-    defer stb.stbi_image_free(data);
+    var img = try zigimg.Image.fromFilePath(local_allocator, path);
+    defer img.deinit();
 
     return createTexture(.{ .texture_id = 0 }, .{
-        .width = @intCast(u16, x),
-        .height = @intCast(u16, y),
+        .width = @intCast(u16, img.width),
+        .height = @intCast(u16, img.height),
         .depth = .RGBA,
-        .pixels = data,
+        .pixels = try img.rawBytes(),
         .min_filter = .NEAREST,
         .mag_filter = .NEAREST,
     });

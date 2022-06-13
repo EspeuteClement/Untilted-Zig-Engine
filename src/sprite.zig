@@ -6,6 +6,8 @@ const texture = @import("texture.zig");
 const aseprite = @import("aseprite.zig");
 const gl = @import("gl");
 const meta = @import("meta.zig");
+const library = @import("library.zig");
+const serialize = @import("serialize.zig");
 
 
 pub const SpriteInfo = struct {
@@ -18,6 +20,12 @@ pub const SpriteInfo = struct {
     texture_id : u16 = 0,
 };
 
+const SpriteLibrary = library.Library(SpriteInfo);
+
+// Api interface from the outside world
+pub const Sprite = SpriteLibrary.Key;
+
+var spriteLibrary : SpriteLibrary = undefined;
 
 
 var local_alloc: Allocator = undefined;
@@ -25,7 +33,36 @@ var local_alloc: Allocator = undefined;
 pub fn init(allocator: Allocator) !void {
     local_alloc = allocator;
 
+    try initSprites();
+    errdefer deinitSprites();
+
     try initQuad();
+    errdefer deinitQuad();
+}
+
+fn initSprites() !void {
+    spriteLibrary = SpriteLibrary.init(local_alloc);
+    errdefer spriteLibrary.deinit();
+
+    var file = try std.fs.cwd().openFile("asset-build/testData.bin", .{});
+    defer file.close();
+
+    var reader = file.reader();
+
+    while(true)
+    {
+        var data = serialize.deserialise(SpriteInfo, reader) catch |err| switch(err)
+        {
+            error.EndOfStream => break,
+            else => return err,
+        };
+
+        spriteLibrary.add(data);
+    }
+}
+
+fn deinitSprites() void {
+    spriteLibrary.deinit();
 }
 
 var quad_vbo: gl.GLuint = undefined;
@@ -60,7 +97,7 @@ pub fn deinitQuad() void {
 }
 
 pub fn deinit() void {
-
+    deinitSprites();
     deinitQuad();
 }
 
@@ -124,20 +161,20 @@ pub const Batch = struct {
         return self;
     }
 
-    // pub fn drawSimple(self: *Self, sprite: Spr, frame: usize, x: f32, y: f32) !void {
-    //     const spr_info = try getFrameInfo(sprite, frame);
+    pub fn drawSimple(self: *Self, sprite: Sprite, x: f32, y: f32) !void {
+        const spr_info = try spriteLibrary.get(sprite);
 
-    //     try self.drawQuad(BufferInfo{
-    //         .x = x + @intToFloat(f32, spr_info.x_offset),
-    //         .y = y + @intToFloat(f32, spr_info.y_offset),
-    //         .w = spr_info.u1 - spr_info.u0,
-    //         .h = spr_info.v1 - spr_info.v0,
-    //         .u0 = spr_info.u0,
-    //         .v0 = spr_info.v0,
-    //         .u1 = spr_info.u1,
-    //         .v1 = spr_info.v1,
-    //     });
-    // }
+        try self.drawQuad(BufferInfo{
+            .x = x + @intToFloat(f32, spr_info.x_offset),
+            .y = y + @intToFloat(f32, spr_info.y_offset),
+            .w = spr_info.u1 - spr_info.u0,
+            .h = spr_info.v1 - spr_info.v0,
+            .u0 = spr_info.u0,
+            .v0 = spr_info.v0,
+            .u1 = spr_info.u1,
+            .v1 = spr_info.v1,
+        });
+    }
 
     pub fn drawQuad(self: *Self, quad_info: BufferInfo) !void {
         try self.buffer.ensureTotalCapacity(self.drawn_this_frame + 1);

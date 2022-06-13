@@ -47,12 +47,12 @@ pub fn run(ctxt: window.Context) !void {
     const h = @intToFloat(f32, ctxt.data.config.game_height);
     const fTime = @intToFloat(f32, time);
 
-    try batch.drawSimple(.@"leneth", @divTrunc(time, 10) % 4, 150.0, 150.0);
+    //try batch.drawSimple(.@"leneth", @divTrunc(time, 10) % 4, 150.0, 150.0);
 
     var i: usize = 0;
     while (i < 10) {
-        const fi = @intToFloat(f32, i);
-        try batch.drawSimple(.@"leneth", @divTrunc(time + i, 10) % 4, 200.0 + 100 * std.math.sin(fTime / 100.0 + fi) + std.math.sin(fTime / 500 + fi * 743.0) * 300.0, 200.0 + 100 * std.math.cos(fTime / 100.0 + fi) + std.math.cos(fTime / 500 + fi * 114.0) * 200.0);
+        //const fi = @intToFloat(f32, i);
+        //try batch.drawSimple(.@"leneth", @divTrunc(time + i, 10) % 4, 200.0 + 100 * std.math.sin(fTime / 100.0 + fi) + std.math.sin(fTime / 500 + fi * 743.0) * 300.0, 200.0 + 100 * std.math.cos(fTime / 100.0 + fi) + std.math.cos(fTime / 500 + fi * 114.0) * 200.0);
         i += 1;
     }
 

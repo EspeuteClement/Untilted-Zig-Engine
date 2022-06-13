@@ -4,6 +4,7 @@ const serialize = @import("serialize.zig");
 const stb_rect_pack = @import("stb_rect_pack.zig");
 const stbi = @import("stbi.zig");
 const zigimg = @import("zigimg");
+const sprite = @import("sprite.zig");
 
 const with_test_data = @import("build_options").test_packing_data;
 
@@ -260,22 +261,12 @@ pub const Bitmap = struct {
     }
 };
 
-const SpriteData = struct {
-    spritesheet_x : u16 = undefined,
-    spritesheet_y : u16 = undefined,
-    offset_x : u16 = undefined,
-    offset_y : u16 = undefined,
-    width : u16 = undefined,
-    height : u16 = undefined,
-};
-
-
 pub const PngPacker = struct {
     allocator: Allocator = undefined,
     bitmap_to_pack_arena: std.heap.ArenaAllocator = undefined,
 
     packing_data: std.MultiArrayList(PackingData) = .{},
-    packing_sprite_data : std.ArrayListUnmanaged(SpriteData) = undefined,
+    packing_sprite_data : std.ArrayListUnmanaged(sprite.FrameInfo) = undefined,
 
 
 
@@ -332,11 +323,11 @@ pub const PngPacker = struct {
         );
 
         try self.packing_sprite_data.append(self.allocator,
-            .{.width = trimmed_bitmap_info.bitmap.width,
-            .height = trimmed_bitmap_info.bitmap.height,
-            .offset_x = @intCast(u16, trimmed_bitmap_info.rect.x), 
-            .offset_y = @intCast(u16, trimmed_bitmap_info.rect.y),
-        });
+            .{  .u1 = @intCast(i16, trimmed_bitmap_info.bitmap.width),
+                .v1 = @intCast(i16, trimmed_bitmap_info.bitmap.height),
+                .x_offset = @intCast(i16, trimmed_bitmap_info.rect.x), 
+                .y_offset = @intCast(i16, trimmed_bitmap_info.rect.y),
+            });
     }
 
     // Returns the number of parsed files
@@ -375,7 +366,11 @@ pub const PngPacker = struct {
         return num_files;
     }
 
+    const root_dir = "asset-build/";
+
     pub fn work(self: *PngPacker, path: []const u8) !void {
+        try std.fs.cwd().makePath(root_dir);
+
         var timer = try std.time.Timer.start();
 
         var content_dir = try std.fs.cwd().openDir(path, .{ .iterate = true });
@@ -398,14 +393,19 @@ pub const PngPacker = struct {
             var pack_rects = self.packing_data.items(.pack_rect);
             _ = packer.packRects(pack_rects);
 
+            var texture_id : u16 = 0;
             var i : isize = @intCast(isize, self.packing_data.len)-1;
             while(i >= 0)
             {
                 var data : PackingData = self.packing_data.get(@intCast(usize, i));
                 if (data.pack_rect.was_packed != 0) {
                     var sprite_data = &self.packing_sprite_data.items[@intCast(usize, data.pack_rect.id)];
-                    sprite_data.spritesheet_x = @intCast(u16, data.pack_rect.x);
-                    sprite_data.spritesheet_y = @intCast(u16, data.pack_rect.y);
+                    sprite_data.u0 = @intCast(i16, data.pack_rect.x);
+                    sprite_data.v0 = @intCast(i16, data.pack_rect.y);
+                    sprite_data.u1 += @intCast(i16, data.pack_rect.x);
+                    sprite_data.v1 += @intCast(i16, data.pack_rect.y);
+                    sprite_data.texture_id = texture_id;
+
                     out_bitmap.blit(data.bitmap, data.bitmap.getRect(), @intCast(i16, data.pack_rect.x), @intCast(i16, data.pack_rect.y));
                 }
 
@@ -424,7 +424,7 @@ pub const PngPacker = struct {
                     try serialize.serialise(data, writer);
                 }
 
-                try std.fs.cwd().writeFile("testData.bin", array.items);
+                try std.fs.cwd().writeFile(root_dir ++ "testData.bin", array.items);
             }
             std.debug.print("Writen sprite data in {d:6.4}s\n", .{@intToFloat(f32, timer.lap()) / std.time.ns_per_s});
 
@@ -441,7 +441,7 @@ pub const PngPacker = struct {
                 defer self.allocator.free(buffer);
                 var out_buffer = try img.writeToMemory(buffer, .qoi, .{.qoi = .{.colorspace = .linear}});
 
-                try std.fs.cwd().writeFile("testAtlas.qoi", out_buffer);
+                try std.fs.cwd().writeFile(root_dir ++ "testAtlas.qoi", out_buffer);
 
                 std.debug.print("Finished writing atlas to disk in {d:6.4}s\n", .{@intToFloat(f32, timer.lap()) / std.time.ns_per_s});
 

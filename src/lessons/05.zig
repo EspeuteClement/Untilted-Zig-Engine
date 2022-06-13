@@ -18,18 +18,6 @@ var camera_uniform: gl.GLint = undefined;
 var texture_handle: texture.TextureHandle = undefined;
 var sprite_handle: sprite.Spr = .@"leneth";
 
-var instance_offsets: [100]SpriteInfo = undefined;
-
-const SpriteInfo = packed struct {
-    x: f32 = 0,
-    y: f32 = 0,
-    w: i16 = 0,
-    h: i16 = 0,
-    u0: i16 = 0,
-    v0: i16 = 0,
-    u1: i16 = 0,
-    v1: i16 = 0,
-};
 
 const ShaderUniform = struct {
     uCamera: shader.Camera = undefined,
@@ -68,7 +56,6 @@ pub fn run(ctxt: window.Context) !void {
         i += 1;
     }
 
-    //std.log.info("{d}", .{instance_offsets[0]});
     gl.clearColor(0, 1, 1, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
 

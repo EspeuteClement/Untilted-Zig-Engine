@@ -17,21 +17,22 @@ fn sprPath(spr: Spr) []const u8 {
 
 const spr_paths = meta.enumNames(Spr);
 
+pub const FrameInfo = struct {
+    x_offset: i16 = 0,
+    y_offset: i16 = 0,
+    u0: i16 = 0,
+    v0: i16 = 0,
+    u1: i16 = 0,
+    v1: i16 = 0,
+    texture_id : u16 = 0,
+};
+
 const SpriteInfo = struct {
     frames: []FrameInfo = undefined,
 
-    const FrameInfo = struct {
-        x_offset: i16 = 0,
-        y_offset: i16 = 0,
-        u0: i16 = 0,
-        v0: i16 = 0,
-        u1: i16 = 0,
-        v1: i16 = 0,
-    };
-
     fn init(allocator: Allocator, num_frames: usize) !Self {
         var info: SpriteInfo = undefined;
-        info.frames = try allocator.alloc(SpriteInfo.FrameInfo, num_frames);
+        info.frames = try allocator.alloc(FrameInfo, num_frames);
         return info;
     }
 
@@ -123,7 +124,7 @@ fn getOrLoad(sprite_handle: Spr) !*SpriteInfo {
     return &sprites[info_index].?;
 }
 
-pub fn getFrameInfo(sprite_handle: Spr, image_index: usize) !SpriteInfo.FrameInfo {
+pub fn getFrameInfo(sprite_handle: Spr, image_index: usize) !FrameInfo {
     var info = try getOrLoad(sprite_handle);
     return info.frames[image_index % info.frames.len];
 }

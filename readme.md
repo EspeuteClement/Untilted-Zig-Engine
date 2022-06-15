@@ -11,9 +11,10 @@ Zigimg for image loading/saving
 imgui for the debug ui
 stb_rect_pack for the atlas packing
 
-# How to build
+# How to get running
 
+* Setup [zig](https://ziglang.org/download/) latest version on your system
+* git clone --recurse-submodules https://github.com/EspeuteClement/Untitled-Zig-Engine.git
+* `cd Untitled-Zig-Engine` 
 * Run `zig build run-asset` to build the game assets
 * Run `zig build run` to run the engine
-
-(note : it seems that the latest zig release broke the mach-glfw bindings. For reference I'm using `0.10.0-dev.929+91a88a789`)

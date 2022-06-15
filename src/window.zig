@@ -82,7 +82,7 @@ pub const Context = struct {
 
         self.allocator = allocator;
 
-        std.log.info("{d: >7.4} init window ...", .{glfw.getTime()});
+        std.debug.print("{d: >7.4} init window ...\n", .{glfw.getTime()});
 
         self.data.glfw_window = try glfw.Window.create(self.data.config.game_width, self.data.config.game_height, "Untilted Zig Engine", null, null, .{
             .opengl_profile = .opengl_core_profile,
@@ -95,10 +95,10 @@ pub const Context = struct {
         glfw.Window.setUserPointer(self.data.glfw_window, self.data);
         glfw.Window.setFramebufferSizeCallback(self.data.glfw_window, onResize);
 
-        std.log.info("{d: >7.4} starting opengl context ...", .{glfw.getTime()});
+        std.debug.print("{d: >7.4} starting opengl context ...\n", .{glfw.getTime()});
         try glfw.makeContextCurrent(self.data.glfw_window);
 
-        std.log.info("{d: >7.4} loading opengl ...", .{glfw.getTime()});
+        std.debug.print("{d: >7.4} loading opengl ...\n", .{glfw.getTime()});
         try gl.load(@as(?*anyopaque, null), getProcAdress);
 
         if (with_imgui) {
@@ -181,7 +181,7 @@ pub const Context = struct {
     }
 
     pub fn run(self: *Context, callback: fn (ctxt: Context) anyerror!void) !void {
-        std.log.info("{d: >7.4} starting main loop ...", .{glfw.getTime()});
+        std.debug.print("{d: >7.4} starting main loop ...\n", .{glfw.getTime()});
         var show_demo_window: bool = true;
         while (!self.data.glfw_window.shouldClose()) {
             try glfw.pollEvents();

@@ -2,7 +2,6 @@ const std = @import("std");
 const gl = @import("gl");
 const window = @import("../window.zig");
 const glhelp = @import("../glhelp.zig");
-const stb = @import("../stbi.zig");
 const aseprite = @import("../aseprite.zig");
 const texture = @import("../texture.zig");
 const sprite = @import("../sprite.zig");

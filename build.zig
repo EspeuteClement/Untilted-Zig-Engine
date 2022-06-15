@@ -26,11 +26,9 @@ pub fn build(b: *std.build.Builder) void {
 
     const main_exe = makeExe(b, target, mode, exe_options, "ZigOpengl", "src/main.zig", "run", "Run the app");
     const asset_builder_exe = makeExe(b, target, mode, exe_options, "AssetBuilder", "src/asset_manager.zig", "run-asset", "Run the asset builder");
-    const png2raw = makeExe(b, target, mode, exe_options, "png2raw", "src/png2raw.zig", "run-png2raw", "Run png2raw");
 
     _ = main_exe;
     _ = asset_builder_exe;
-    _ = png2raw;
 
     const exe_tests = b.addTest("src/main.zig");
     configure(exe_tests, b, target, mode, exe_options);
@@ -96,7 +94,6 @@ fn configure(step: anytype, b: *std.build.Builder, target: std.zig.CrossTarget, 
     step.linkLibC();
 
     step.addIncludePath("libs/stb");
-    step.addCSourceFile("libs/stb/stbi_impl.c", &[_][]const u8{"-std=c99"});
     step.addCSourceFile("libs/stb/stb_rect_pack.c", &[_][]const u8{"-std=c99"});
 
     glfw.link(b, step, .{});

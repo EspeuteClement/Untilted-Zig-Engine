@@ -1,8 +1,6 @@
 const std = @import("std");
 const serialize = @import("serialize.zig");
-//const window = @import("window.zig");
 const stb_rect_pack = @import("stb_rect_pack.zig");
-const stbi = @import("stbi.zig");
 const zigimg = @import("zigimg");
 const sprite = @import("sprite.zig");
 

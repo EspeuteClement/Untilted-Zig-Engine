@@ -3,7 +3,7 @@ const std = @import("std");
 const window = @import("window.zig");
 const build_options = @import("build_options");
 
-const lesson = @import("lessons/05.zig");
+const lesson = @import("game/game.zig");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};

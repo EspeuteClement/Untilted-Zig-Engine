@@ -98,7 +98,7 @@ const CreateTextureParams = struct {
     mag_filter: Filter = .NEAREST,
     depth: Depth = .RGBA,
     mipmaps: bool = false,
-    pixels: ?*anyopaque = null,
+    pixels: ?[]const u8 = null,
     pixel_format: Depth = .RGBA,
 };
 
@@ -108,7 +108,17 @@ pub fn createTexture(id: TextureHandle, params: CreateTextureParams) !TextureHan
     gl.genTextures(1, &info.handle);
     gl.bindTexture(gl.TEXTURE_2D, info.handle);
 
-    gl.texImage2D(gl.TEXTURE_2D, 0, params.depth.toGL(), @intCast(c_int, params.width), @intCast(c_int, params.height), 0, @intCast(gl.GLenum, params.pixel_format.toGL()), gl.UNSIGNED_BYTE, params.pixels);
+    gl.texImage2D(
+        gl.TEXTURE_2D, 
+        0, 
+        params.depth.toGL(), 
+        @intCast(c_int, params.width), 
+        @intCast(c_int, params.height), 
+        0, 
+        @intCast(gl.GLenum, params.pixel_format.toGL()), 
+        gl.UNSIGNED_BYTE, 
+        if(params.pixels) |pixels| pixels.ptr else null
+    );
 
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, params.min_filter.toGL());
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, params.mag_filter.toGL());

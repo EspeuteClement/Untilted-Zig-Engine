@@ -84,7 +84,7 @@ pub const Context = struct {
 
         std.log.info("{d: >7.4} init window ...", .{glfw.getTime()});
 
-        self.data.glfw_window = try glfw.Window.create(self.data.config.game_width, self.data.config.game_height, "Learn Opengl", null, null, .{
+        self.data.glfw_window = try glfw.Window.create(self.data.config.game_width, self.data.config.game_height, "Untilted Zig Engine", null, null, .{
             .opengl_profile = .opengl_core_profile,
             .context_version_major = 3,
             .context_version_minor = 3,
@@ -137,7 +137,7 @@ pub const Context = struct {
             .v1 = 0,
         });
 
-        self.data.shader = @TypeOf(self.data.shader).init(try glhelp.buildProgram(@embedFile("lessons/05.vert"), @embedFile("lessons/05.frag")));
+        self.data.shader = @TypeOf(self.data.shader).init(try glhelp.buildProgram(@embedFile("game/game.vert"), @embedFile("game/game.frag")));
         errdefer self.data.shader.deinit();
 
         return self;

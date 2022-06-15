@@ -160,6 +160,11 @@ pub const Context = struct {
         self.allocator.destroy(self.data);
     }
 
+    fn getImGuiWindowsWantedSize(self : *Context, scale : u32) c.ImVec2
+    {
+        return .{ .x = @intToFloat(f32, scale * self.data.config.game_width), .y = @intToFloat(f32, scale * self.data.config.game_height) + 32.0 };
+    } 
+
     fn imguiGameRenderSizeConstraintCallback(data_ptr: [*c]c.ImGuiSizeCallbackData) callconv(.C) void {
         if (data_ptr) |data| {
             var self: *Context = @ptrCast(*Context, @alignCast(@alignOf(Context), data.*.UserData));
@@ -171,7 +176,7 @@ pub const Context = struct {
 
             self.data.current_zoom = @intCast(u8, min);
 
-            data.*.DesiredSize = .{ .x = @intToFloat(f32, min * self.data.config.game_width), .y = @intToFloat(f32, min * self.data.config.game_height) + 32.0 };
+            data.*.DesiredSize = self.getImGuiWindowsWantedSize(min);
         }
     }
 
@@ -202,6 +207,7 @@ pub const Context = struct {
             texture.bindFramebuffer(null);
 
             if (with_imgui) {
+                c.igSetNextWindowSize(self.getImGuiWindowsWantedSize(1), c.ImGuiCond_FirstUseEver);
                 c.igSetNextWindowSizeConstraints(.{ .x = 0, .y = 0 }, .{ .x = std.math.f32_max, .y = std.math.f32_max }, imguiGameRenderSizeConstraintCallback, self);
 
                 const textureID = texture.getTextureInternalID(texture.getFramebufferTexture(self.data.game_buffer));

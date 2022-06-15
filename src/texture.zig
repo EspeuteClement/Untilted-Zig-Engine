@@ -35,11 +35,13 @@ var framebufferLibrary: FramebufferLibrary = undefined;
 var is_init = false;
 
 var local_allocator : Allocator = undefined;
+var local_temp_allocator : std.heap.ArenaAllocator = undefined;
 
 pub fn init(allocator: Allocator) !void {
     defer is_init = true;
 
     local_allocator = allocator;
+    local_temp_allocator = std.heap.ArenaAllocator.init(local_allocator);
 
     if (is_init) @panic("Already init");
     textureLibrary = try TextureLibrary.initCapacity(allocator, 128);
@@ -53,8 +55,12 @@ const LoadTextureParameters = struct {};
 
 pub fn loadTexture(path: []const u8, params: LoadTextureParameters) !TextureHandle {
     _ = params;
+    
 
-    var img = try zigimg.Image.fromFilePath(local_allocator, path);
+    var file_data = try std.fs.cwd().readFileAlloc(local_temp_allocator.allocator(), path, 100_000_000);   
+    defer local_temp_allocator.allocator().free(file_data);
+
+    var img = try zigimg.Image.fromMemory(local_temp_allocator.allocator(), file_data);
     defer img.deinit();
 
     return createTexture(.{ .texture_id = 0 }, .{

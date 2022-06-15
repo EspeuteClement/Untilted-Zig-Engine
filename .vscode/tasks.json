@@ -31,7 +31,10 @@
                 "showReuseMessage": false,
                 "clear": true
             },
-            "group": "build"
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
         },
         {
             "label": "zig test",
@@ -50,7 +53,7 @@
                 "clear": true
             },
             "group": {
-                "kind": "build",
+                "kind": "build"
             }
         },
         {
@@ -60,7 +63,7 @@
             "args": [
                 "build",
                 "test-asset",
-                "--prominent-compile-errors",
+                "--prominent-compile-errors"
             ],
             "presentation": {
                 "echo": true,
@@ -70,10 +73,7 @@
                 "showReuseMessage": false,
                 "clear": true
             },
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            }
+            "group": "build"
         }
     ]
 }

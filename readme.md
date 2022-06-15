@@ -1,5 +1,7 @@
 # Description
 
+![Screenshot](doc/screenshot.png)
+
 Prototype 2d oriented game engine, featuring automatic atlas baking and various experimentations in sprite rendering.
 Used by me as a playground for the zig language.
 

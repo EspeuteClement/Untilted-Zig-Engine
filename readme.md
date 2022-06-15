@@ -13,7 +13,7 @@ stb_rect_pack for the atlas packing
 
 # How to build
 
-Run `zig build run-asset` to build the game assets
-Run `zig build run` to run the engine
+* Run `zig build run-asset` to build the game assets
+* Run `zig build run` to run the engine
 
 (note : it seems that the latest zig release broke the mach-glfw bindings. For reference I'm using `0.10.0-dev.929+91a88a789`)

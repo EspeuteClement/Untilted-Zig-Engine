@@ -98,7 +98,7 @@ test "Test Shaders" {
     defer context.deinit();
 
     const S = Shader(TestShaderParams);
-    var s = S.init(try glhelp.buildProgram(@embedFile("lessons/05.vert"), @embedFile("lessons/05.frag")));
+    var s = S.init(try glhelp.buildProgram(@embedFile("game/game.vert"), @embedFile("game/game.frag")));
 
     s.bind(TestShaderParams{ .uCamera = makeCamera(0, 0, 640, 480) });
 }

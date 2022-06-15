@@ -238,3 +238,9 @@ pub const Context = struct {
         }
     }
 };
+
+test "Init deinit"
+{
+    var context: Context = try Context.init(std.testing.allocator);
+    defer context.deinit();
+}

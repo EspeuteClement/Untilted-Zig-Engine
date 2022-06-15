@@ -199,6 +199,8 @@ pub fn deinit() void {
         gl.deleteFramebuffers(1, &framebufferInfo.handle);
     }
     framebufferLibrary.deinit();
+
+    local_temp_allocator.deinit();
 }
 
 test "Texture loading" {

@@ -30,9 +30,16 @@ pub fn init(ctxt: window.Context) !void {
     _ = ctxt;
 
     batch = try sprite.Batch.init(ctxt.allocator);
+    errdefer batch.deinit();
     batch.texture_handle = try texture.loadTexture("asset-build/testAtlas.qoi", .{});
 
     game_shader = @TypeOf(game_shader).init(try glhelp.buildProgram(@embedFile("game.vert"), @embedFile("game.frag")));
+}
+
+pub fn deinit(ctxt: window.Context) void {
+    _ = ctxt;
+    batch.deinit();
+    game_shader.deinit();
 }
 
 var time: usize = 0;

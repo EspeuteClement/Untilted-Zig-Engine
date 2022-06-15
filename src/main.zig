@@ -15,6 +15,7 @@ pub fn main() !void {
     defer context.deinit();
 
     try game.init(context);
+    defer game.deinit(context);
     try context.run(game.run);
 }
 
@@ -22,4 +23,5 @@ test "package tests" {
     _ = @import("texture.zig");
     _ = @import("sprite.zig");
     _ = @import("shader.zig");
+    _ = @import("window.zig");
 }

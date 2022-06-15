@@ -1,7 +1,7 @@
 const std = @import("std");
 const glfw = @import("libs/mach-glfw/build.zig");
 
-const with_imgui = false;
+const with_imgui = true;
 const test_packing_data = false;
 
 pub fn build(b: *std.build.Builder) void {
@@ -19,7 +19,6 @@ pub fn build(b: *std.build.Builder) void {
     const exe_options = b.addOptions();
     exe_options.addOption(bool, "with_imgui", with_imgui);
     exe_options.addOption(bool, "test_packing_data", test_packing_data);
-
 
     // const exe_options = b.addOptions();
 
@@ -48,6 +47,7 @@ pub fn build(b: *std.build.Builder) void {
 
 fn makeExe(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std.builtin.Mode, exe_options: *std.build.OptionsStep, name: []const u8, root: []const u8, step_name: []const u8, step_desc: []const u8) struct { exe: *std.build.LibExeObjStep, run_cmd: *std.build.RunStep, run_step: *std.build.Step } {
     const exe = b.addExecutable(name, root);
+    exe.want_lto = false;
     configure(exe, b, target, mode, exe_options);
     exe.install();
 

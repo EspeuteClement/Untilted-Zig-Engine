@@ -57,7 +57,7 @@ fn initSprites() !void {
             else => return err,
         };
 
-        spriteLibrary.add(data);
+        _ = try spriteLibrary.add(data);
     }
 }
 

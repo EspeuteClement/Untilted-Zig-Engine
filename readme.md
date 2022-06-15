@@ -1,10 +1,21 @@
 # Description
 
+**Warning : very much work in progress**
+
 ![Screenshot](doc/screenshot.png)
 
 Prototype 2d oriented game engine, featuring automatic atlas baking and various experiments in sprite rendering.
 
 Used by me as a playground for the zig language.
+
+Goals :
+* Hassle free asset managment, akin to Gamemaker (i.e the engine loads textures when needed and automaticaly batches render calls)
+* Optimised workflow for 2d sprite based games
+
+Current features :
+* Automatic atlas batching of sprites
+* Simple renderer abstraction for 2d rendering (sprites batches and framebuffers)
+* Simple windowing abstraction
 
 Uses : 
 * [mach-glfw](https://github.com/hexops/mach-glfw) bindings for glfw

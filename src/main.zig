@@ -16,7 +16,7 @@ pub fn main() !void {
 
     try game.init(context);
     defer game.deinit(context);
-    try context.run(game.run);
+    try context.run(game.run, game.draw);
 }
 
 test "package tests" {

@@ -1,8 +1,9 @@
 const std = @import("std");
 const glfw = @import("libs/mach-glfw/build.zig");
 
-const with_imgui = true;
+const with_imgui = false;
 const test_packing_data = false;
+
 
 pub fn build(b: *std.build.Builder) void {
 
@@ -19,6 +20,8 @@ pub fn build(b: *std.build.Builder) void {
     const exe_options = b.addOptions();
     exe_options.addOption(bool, "with_imgui", with_imgui);
     exe_options.addOption(bool, "test_packing_data", test_packing_data);
+    exe_options.addOption(bool, "with_profiling", b.option(bool, "profiling", "enable or disable profiling (default : false)") orelse false);
+
 
     // const exe_options = b.addOptions();
 

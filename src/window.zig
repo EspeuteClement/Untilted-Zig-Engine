@@ -9,6 +9,8 @@ const texture = @import("texture.zig");
 const sprite = @import("sprite.zig");
 const shader = @import("shader.zig");
 
+const profile = @import("profile.zig");
+
 const c = @cImport({
     @cDefine("CIMGUI_DEFINE_ENUMS_AND_STRUCTS", "1");
     @cInclude("cimgui.h");
@@ -42,6 +44,8 @@ pub const Context = struct {
     pub const Data = struct {
         glfw_window: glfw.Window = undefined,
         game_buffer: texture.FramebufferHandle = undefined,
+
+        time : f64 = 0.0,
 
         config: Config = Config{},
 
@@ -95,6 +99,8 @@ pub const Context = struct {
         glfw.Window.setUserPointer(self.data.glfw_window, self.data);
         glfw.Window.setFramebufferSizeCallback(self.data.glfw_window, onResize);
 
+        //try self.data.glfw_window.setMonitor(glfw.Monitor.getPrimary(), 0,0,1920,1080, 60);
+
         std.debug.print("{d: >7.4} starting opengl context ...\n", .{glfw.getTime()});
         try glfw.makeContextCurrent(self.data.glfw_window);
 
@@ -118,7 +124,7 @@ pub const Context = struct {
         try sprite.init(allocator);
         errdefer sprite.deinit();
 
-        try glfw.swapInterval(1);
+        try glfw.swapInterval(0);
 
         try self.initGameRenderbuffer();
 
@@ -180,11 +186,38 @@ pub const Context = struct {
         }
     }
 
-    pub fn run(self: *Context, callback: fn (ctxt: Context) anyerror!void) !void {
+    pub fn run(self: *Context, update_callback: fn(ctxt: Context) anyerror!void, draw_callback: fn (ctxt: Context) anyerror!void) !void {
         std.debug.print("{d: >7.4} starting main loop ...\n", .{glfw.getTime()});
         var show_demo_window: bool = true;
+
+        self.data.time = glfw.getTime();
+        var accumulator : f64 = 0.0;
+
         while (!self.data.glfw_window.shouldClose()) {
-            try glfw.pollEvents();
+            var prof2 = profile.begin(@src(), "mainLoop"); defer prof2.end();
+            
+            const current_time = glfw.getTime();
+            var delta_frame_time = current_time - self.data.time;
+            self.data.time = current_time;
+
+            std.debug.print("\n---------------\nNew frame, delta : {d:.4}ms\n", .{delta_frame_time/std.time.ms_per_s});
+
+            if (std.math.fabs(delta_frame_time - 1.0/60.0) < 0.0005) {
+                delta_frame_time = 1.0/60.0;
+            }
+            else if (std.math.fabs(delta_frame_time - 1.0/30.0) < 0.0005) {
+                delta_frame_time = 1.0/30.0;
+            }
+
+
+            accumulator += delta_frame_time;
+
+            while(accumulator >= 1.0 / 60.0) {
+                try glfw.pollEvents();
+                try update_callback(self.*);
+                accumulator -= 1.0/60.0;
+            }
+
 
             gl.clearColor(0.2, 0.2, 0.2, 1.0);
             gl.clear(gl.COLOR_BUFFER_BIT);
@@ -203,7 +236,7 @@ pub const Context = struct {
             gl.viewport(0, 0, @intCast(c_int, self.data.config.game_width), @intCast(c_int, self.data.config.game_height));
 
             texture.bindFramebuffer(self.data.game_buffer);
-            try callback(self.*);
+            try draw_callback(self.*);
             texture.bindFramebuffer(null);
 
             if (with_imgui) {
@@ -234,7 +267,19 @@ pub const Context = struct {
                 c.ImGui_ImplOpenGL3_RenderDrawData(c.igGetDrawData());
             }
 
-            try glfw.Window.swapBuffers(self.data.glfw_window);
+            {
+                var prof = profile.begin(@src(), "swapBuffers"); defer prof.end();
+                
+                try glfw.Window.swapBuffers(self.data.glfw_window);
+            }
+
+
+
+            var update_time = glfw.getTime() - current_time;
+
+            while (update_time < 1.0/60.0 * 0.5) {
+                update_time = glfw.getTime() - current_time;
+            }
         }
     }
 };

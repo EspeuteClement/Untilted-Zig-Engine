@@ -9,6 +9,7 @@ const meta = @import("meta.zig");
 const library = @import("library.zig");
 const serialize = @import("serialize.zig");
 
+const profile = @import("profile.zig");
 
 pub const SpriteInfo = struct {
     x_offset: i16 = 0,
@@ -25,7 +26,7 @@ const SpriteLibrary = library.Library(SpriteInfo);
 // Api interface from the outside world
 pub const Sprite = SpriteLibrary.Key;
 
-var spriteLibrary : SpriteLibrary = undefined;
+pub var spriteLibrary : SpriteLibrary = undefined;
 
 
 var local_alloc: Allocator = undefined;
@@ -161,9 +162,13 @@ pub const Batch = struct {
         return self;
     }
 
-    pub fn drawSimple(self: *Self, sprite: Sprite, x: f32, y: f32) !void {
+    pub inline fn drawSimple(self: *Self, sprite: Sprite, x: f32, y: f32) !void {
         const spr_info = try spriteLibrary.get(sprite);
 
+        try self.drawSpriteInfo(spr_info, x, y);
+    }
+
+    pub inline fn drawSpriteInfo(self: *Self, spr_info : SpriteInfo, x: f32, y: f32) !void {
         try self.drawQuad(BufferInfo{
             .x = x + @intToFloat(f32, spr_info.x_offset),
             .y = y + @intToFloat(f32, spr_info.y_offset),
@@ -176,7 +181,7 @@ pub const Batch = struct {
         });
     }
 
-    pub fn drawQuad(self: *Self, quad_info: BufferInfo) !void {
+    pub inline fn drawQuad(self: *Self, quad_info: BufferInfo) !void {
         try self.buffer.ensureTotalCapacity(self.drawn_this_frame + 1);
         self.buffer.expandToCapacity();
 
@@ -194,19 +199,27 @@ pub const Batch = struct {
         if (self.texture_handle) |texture_handle_not_null| {
             gl.bindBuffer(gl.ARRAY_BUFFER, self.vbo);
             if (self.buffer.items.len > 0) {
-                if (self.drawn_this_frame < self.last_gl_size) {
+                var prof = profile.begin(@src(), "bufferData"); defer prof.end();
+
+                if (self.drawn_this_frame <= self.last_gl_size) {
                     gl.bufferSubData(gl.ARRAY_BUFFER, 0, @intCast(isize, self.drawn_this_frame * @sizeOf(BufferInfo)), &self.buffer.items[0]);
                 } else {
                     gl.bufferData(gl.ARRAY_BUFFER, @intCast(isize, self.drawn_this_frame * @sizeOf(BufferInfo)), &self.buffer.items[0], gl.DYNAMIC_DRAW);
+                    self.last_gl_size = self.drawn_this_frame;
                 }
+
             }
 
             gl.bindVertexArray(self.vao);
             gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
             texture.bindTexture(texture_handle_not_null);
+            
+            {
+                var prof = profile.begin(@src(), "drawElementsInstanced"); defer prof.end();
+                gl.drawElementsInstanced(gl.TRIANGLES, 6, gl.UNSIGNED_INT, null, @intCast(c_int, self.drawn_this_frame));
+            }   
 
-            gl.drawElementsInstanced(gl.TRIANGLES, 6, gl.UNSIGNED_INT, null, @intCast(c_int, self.drawn_this_frame));
         } else {
             return error.NoTextureBound;
         }

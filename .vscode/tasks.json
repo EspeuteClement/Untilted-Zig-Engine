@@ -37,6 +37,23 @@
             }
         },
         {
+            "label": "zig build run",
+            "type": "shell",
+            "command": "zig build run --prominent-compile-errors",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": true
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
             "label": "zig test",
             "type": "shell",
             "command": "zig",

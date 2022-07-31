@@ -6,6 +6,7 @@ const aseprite = @import("../aseprite.zig");
 const texture = @import("../texture.zig");
 const sprite = @import("../sprite.zig");
 const shader = @import("../shader.zig");
+const res = @import("res");
 
 const profile = @import("../profile.zig");
 
@@ -31,6 +32,14 @@ var game_shader: shader.Shader(ShaderUniform) = undefined;
 var actors : []Actor = undefined;
 const max_actors = 100_000;
 
+
+const TestEnum = enum(u32) {
+    a,
+    b,
+    c,
+    d,
+    _
+};
 
 const Actor = struct {
     x : f32,
@@ -103,7 +112,7 @@ pub fn draw(ctxt: window.Context) !void {
     //     i += 1;
     // }
 
-    const spr = try sprite.spriteLibrary.get(.{.index = 1});
+    const spr = try sprite.spriteLibrary.get(.{.index = @enumToInt(res.Img.idle001)});
 
     if (!static or first_time)
     {

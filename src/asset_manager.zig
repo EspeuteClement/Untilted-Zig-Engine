@@ -28,6 +28,7 @@ pub const PackBuilder = struct {
         return self;
     }
 
+
     pub fn addTexture() void {}
 };
 
@@ -296,7 +297,7 @@ pub const PngPacker = struct {
     packing_sprite_data : std.ArrayListUnmanaged(sprite.SpriteInfo) = undefined,
     packing_sprite_names : std.ArrayListUnmanaged([]const u8) = undefined,
 
-    source_m_time : i128 = undefined,
+    source_hash : std.crypto.hash.blake2.Blake2b384 = undefined,
 
     const PackingData = struct {
         bitmap : Bitmap,
@@ -326,8 +327,7 @@ pub const PngPacker = struct {
     }
 
     fn processInputFilesForDate(self: *PngPacker, dir: std.fs.IterableDir, file_path: []const u8) !void {
-        var stat = try dir.dir.statFile(file_path);
-        self.source_m_time = @maximum(self.source_m_time, stat.mtime);
+        try self.hashFileInfo(dir.dir, file_path);
     }
 
 
@@ -419,7 +419,7 @@ pub const PngPacker = struct {
         
         _ = try writer.write("pub const Img = enum(u32) {\n");
         for (self.packing_sprite_names.items) |name| {
-            _ = try writer.print("\t{},\n", .{std.zig.fmtId(std.mem.trim(u8, name, ".png"))});
+            _ = try writer.print("    {},\n", .{std.zig.fmtId(std.mem.trim(u8, name, ".png"))});
         }
         _ = try writer.write("_\n");
         _ = try writer.write("};\n");
@@ -430,18 +430,18 @@ pub const PngPacker = struct {
     const targetBinPath = root_dir ++ "testData.bin";
     const targetQoiPath = root_dir ++ "testAtlas.qoi";
     const targetZigPath = root_dir ++ "enums.zig";
+    const hashPath = root_dir ++ ".hash";
 
-    pub fn updateMtimeIfOlder(dir : std.fs.Dir, path : []const u8, mtime : *i128) !void {
-        var stat = try (dir.statFile(path));
-        mtime.* = @minimum(mtime.*, stat.mtime);
-    }
 
-    pub fn updateMtimeIfNewer(dir : std.fs.Dir, path : []const u8, mtime : *i128) !void {
-        var stat = try (dir.statFile(path));
-        mtime.* = @maximum(mtime.*, stat.mtime);
+    pub fn hashFileInfo(self: *PngPacker, dir : std.fs.Dir, path : []const u8) !void {
+        self.source_hash.update(path);
+        var stat = try dir.statFile(path);
+        self.source_hash.update(&std.mem.toBytes(stat.mtime));
     }
 
     pub fn work(self: *PngPacker, path: []const u8) !void {
+        std.debug.print("Asset builder start ...\n", .{});
+
         try std.fs.cwd().makePath(root_dir);
 
         var timer = try std.time.Timer.start();
@@ -449,22 +449,33 @@ pub const PngPacker = struct {
         var content_dir = try std.fs.cwd().openIterableDir(path, .{});
         defer content_dir.close();
 
-        var targets_m_time : i128 = std.math.maxInt(i128);
+        self.source_hash = std.crypto.hash.blake2.Blake2b384.init(.{});
 
-        // Targets : take the older time
-        updateMtimeIfOlder(std.fs.cwd(), targetBinPath, &targets_m_time) catch {targets_m_time = 0;};
-        updateMtimeIfOlder(std.fs.cwd(), targetQoiPath, &targets_m_time) catch {targets_m_time = 0;};
-        updateMtimeIfOlder(std.fs.cwd(), targetZigPath, &targets_m_time) catch {targets_m_time = 0;};
-        
         // Sources : take the newest time
-        _ = try self.findAllOfTypeAndDo(content_dir, &[_][]const u8{".png"}, processInputFilesForDate);
-        try updateMtimeIfNewer(std.fs.cwd(), "src/asset_manager.zig", &self.source_m_time);
+        {
 
-        if (targets_m_time >= self.source_m_time) {
-            std.debug.print("Built assets are more recent than source files, skipping ...", .{});
-            return;
+            _ = try self.findAllOfTypeAndDo(content_dir, &[_][]const u8{".png"}, processInputFilesForDate);
+            try self.hashFileInfo(std.fs.cwd(), "src/asset_manager.zig");
+
+            const buff_len = std.crypto.hash.blake2.Blake2b384.digest_length;
+            var new_hash : [buff_len]u8 = undefined;
+            self.source_hash.final(&new_hash);
+
+            
+            var previous_hash : [buff_len]u8 = undefined;
+            _ = std.fs.cwd().readFile(hashPath,&previous_hash) catch {};
+
+            std.debug.print("Computed hash in {d:6.4}s\n", .{@intToFloat(f32, timer.lap()) / std.time.ns_per_s});
+
+            if (std.mem.eql(u8, &new_hash, &previous_hash)) {
+                std.debug.print("Assets are up to date ...\n", .{});
+                return;
+            }
+
+            std.fs.cwd().writeFile(hashPath,&new_hash) catch {};
+
+
         }
-
 
         const num_files = try self.findAllOfTypeAndDo(content_dir, &[_][]const u8{".png"}, preProcessImageForAtlas);
 

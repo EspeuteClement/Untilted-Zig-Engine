@@ -27,13 +27,14 @@ pub fn build(b: *std.build.Builder) void {
 
     // exe_options.addOption([]const u8, "lesson", b.option([]const u8, "lesson", "Lesson file to build (ex : '01')") orelse "01");
 
-    const main_exe = makeExe(b, target, mode, exe_options, "ZigOpengl", "src/main.zig", "run", "Run the app");
-    const asset_builder_exe = makeExe(b, target, mode, exe_options, "AssetBuilder", "src/asset_manager.zig", "run-asset", "Run the asset builder");
+    const main_exe = makeExe(b, target, mode, exe_options, "ZigOpengl", "src/main.zig", "run", "Run the app", true);
+    const asset_builder_exe = makeExe(b, target, mode, exe_options, "AssetBuilder", "src/asset_manager.zig", "run-asset", "Run the asset builder", false);
 
     _ = main_exe;
     _ = asset_builder_exe;
 
-    main_exe.run_cmd.step.dependOn(asset_builder_exe.run_step);
+    main_exe.exe.step.dependOn(asset_builder_exe.run_step);
+    main_exe.exe.addPackagePath("res", "asset-build/enums.zig");
 
     // const exe_tests = b.addTest("src/main.zig");
     // configure(exe_tests, b, target, mode, exe_options);
@@ -48,14 +49,16 @@ pub fn build(b: *std.build.Builder) void {
     // test_asset_step.dependOn(&asset_tests.step);
 }
 
-fn makeExe(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std.builtin.Mode, exe_options: *std.build.OptionsStep, name: []const u8, root: []const u8, step_name: []const u8, step_desc: []const u8) struct { exe: *std.build.LibExeObjStep, run_cmd: *std.build.RunStep, run_step: *std.build.Step } {
+fn makeExe(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std.builtin.Mode, exe_options: *std.build.OptionsStep, name: []const u8, root: []const u8, step_name: []const u8, step_desc: []const u8, do_install : bool) struct { exe: *std.build.LibExeObjStep, run_cmd: *std.build.RunStep, run_step: *std.build.Step } {
     const exe = b.addExecutable(name, root);
     exe.want_lto = false;
     configure(exe, b, target, mode, exe_options);
     exe.install();
 
     const run_cmd = exe.run();
-    run_cmd.step.dependOn(b.getInstallStep());
+    if (do_install) {
+        run_cmd.step.dependOn(b.getInstallStep());
+    }
     if (b.args) |args| {
         run_cmd.addArgs(args);
     }

@@ -259,6 +259,35 @@ pub const Bitmap = struct {
     }
 };
 
+pub const AssetBuildStep = struct {
+    step : std.build.Step,
+    builder : *std.build.Builder,
+
+    enum_source : std.build.GeneratedFile,
+
+    packer : PngPacker,
+
+    pub fn init(builder: *std.build.Builder) AssetBuildStep {
+        var buildStep = AssetBuildStep {
+            .builder = builder,
+            .step = std.build.Step.init(.custom, "assetBuild", builder.allocator, make),
+            .enum_source = undefined,
+            .packer = PngPacker.init(builder.allocator),
+        };
+
+        buildStep.enum_source = std.build.GeneratedFile{.step = &buildStep.step};
+
+        return buildStep;
+    }
+
+    fn make(step: *std.build.Step) !void {
+        const self = @fieldParentPtr(AssetBuildStep, "step", step);
+        try self.packer.work("data");
+
+        self.enum_source.path = PngPacker.targetZigPath;
+    }
+};
+
 pub const PngPacker = struct {
     allocator: Allocator = undefined,
     bitmap_to_pack_arena: std.heap.ArenaAllocator = undefined,
@@ -388,10 +417,11 @@ pub const PngPacker = struct {
         var buffer = std.ArrayList(u8).init(self.allocator);
         var writer = buffer.writer();
         
-        _ = try writer.write("pub const Img = enum {\n");
+        _ = try writer.write("pub const Img = enum(u32) {\n");
         for (self.packing_sprite_names.items) |name| {
             _ = try writer.print("\t{},\n", .{std.zig.fmtId(std.mem.trim(u8, name, ".png"))});
         }
+        _ = try writer.write("_\n");
         _ = try writer.write("};\n");
 
         return buffer.toOwnedSlice();
@@ -406,6 +436,11 @@ pub const PngPacker = struct {
         mtime.* = @minimum(mtime.*, stat.mtime);
     }
 
+    pub fn updateMtimeIfNewer(dir : std.fs.Dir, path : []const u8, mtime : *i128) !void {
+        var stat = try (dir.statFile(path));
+        mtime.* = @maximum(mtime.*, stat.mtime);
+    }
+
     pub fn work(self: *PngPacker, path: []const u8) !void {
         try std.fs.cwd().makePath(root_dir);
 
@@ -416,19 +451,20 @@ pub const PngPacker = struct {
 
         var targets_m_time : i128 = std.math.maxInt(i128);
 
+        // Targets : take the older time
         updateMtimeIfOlder(std.fs.cwd(), targetBinPath, &targets_m_time) catch {targets_m_time = 0;};
         updateMtimeIfOlder(std.fs.cwd(), targetQoiPath, &targets_m_time) catch {targets_m_time = 0;};
         updateMtimeIfOlder(std.fs.cwd(), targetZigPath, &targets_m_time) catch {targets_m_time = 0;};
-        // Cannot be missing
-        try updateMtimeIfOlder(std.fs.cwd(), "src/asset_manager.zig", &targets_m_time);
-
-
+        
+        // Sources : take the newest time
         _ = try self.findAllOfTypeAndDo(content_dir, &[_][]const u8{".png"}, processInputFilesForDate);
+        try updateMtimeIfNewer(std.fs.cwd(), "src/asset_manager.zig", &self.source_m_time);
 
         if (targets_m_time >= self.source_m_time) {
             std.debug.print("Built assets are more recent than source files, skipping ...", .{});
             return;
         }
+
 
         const num_files = try self.findAllOfTypeAndDo(content_dir, &[_][]const u8{".png"}, preProcessImageForAtlas);
 
